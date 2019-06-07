@@ -1,0 +1,423 @@
+import cv2
+import os
+import math
+import random
+import numpy as np
+import pandas as pd
+
+
+def get_detect_in_wind(file_boxes, dict_in):
+    xmin = dict_in["xmin"]
+    xmax = dict_in["xmax"]
+    ymin = dict_in["ymin"]
+    ymax = dict_in["ymax"]
+    min_size_x = dict_in["min_size_x"]
+    min_size_y = dict_in["min_size_y"]
+    min_pct = dict_in["min_pct"]
+    out_string = ""
+    out_list = []
+    n_out = 0
+    for ln in range(file_boxes.shape[0]):
+        line = file_boxes.iloc[ln]
+        # check if detection is in window
+        if line.xmax >= xmin and line.xmin < xmax and line.ymax >= ymin and line.ymin < ymax:
+            # get original size of box
+            orig_wid = line.xmax - line.xmin
+            orig_hei = line.ymax - line.ymin
+            # find new position of bbox
+            line.xmax = np.minimum(line.xmax, xmax)
+            line.xmin = np.maximum(line.xmin, xmin)
+            line.ymax = np.minimum(line.ymax, ymax)
+            line.ymin = np.maximum(line.ymin, ymin)
+            # get new width and height
+            line.wid = line.xmax - line.xmin
+            # if this makes the box too thin skip to next detection
+            if line.wid < min_size_x:
+                continue
+            if line.wid < (orig_wid / min_pct):
+                continue
+            line.height = line.ymax - line.ymin
+            # if this makes the box too short skip to next detection
+            if line.height < min_size_y:
+                continue
+            if line.height < (orig_hei / min_pct):
+                continue
+            line.wid_half = np.divide(line.wid, 2)
+            line.hei_half = np.divide(line.height, 2)
+            line.xc = np.add(line.xmin, line.wid_half)
+            line.yc = np.add(line.ymin, line.hei_half)
+            # convert position in  image to position in window
+            line.xc = (line.xc - xmin) / (xmax - xmin)
+            line.yc = (line.yc - ymin) / (ymax - ymin)
+            line.wid = line.wid / (xmax - xmin)
+            line.height = line.height / (ymax - ymin)
+            line_out = [line.oc, line.xc, line.yc, line.wid, line.height]
+            out_list.extend(line_out)
+            n_out += 1
+            # output position in window
+            out_string = out_string + str(line.oc) + ' ' + str(line.xc) + ' ' + str(line.yc) + ' '
+            out_string = out_string + str(line.wid) + ' ' + str(line.height) + '\n'
+    out_array = np.array(out_list)
+    out_array = np.reshape(out_array, (n_out, 5))
+    return out_string, out_array
+
+
+def write_txt_file(out_string, out_name):
+    # get rid of final line separator
+    out_string = out_string[:-1]
+    txt_path = out_name + '.txt'
+    with open(txt_path, "w") as text_file:
+        text_file.write(out_string)
+
+def blank_txt_file(out_name):
+    txt_path = out_name + '.txt'
+    with open(txt_path, "w") as text_file:
+        text_file.write("")
+
+
+def get_tile_image(image_in, options, resize=False):
+    xmin = options["xmin"]
+    xmax = options["xmax"]
+    ymin = options["ymin"]
+    ymax = options["ymax"]
+    # get just this window from image and write it out
+    image_out = image_in[ymin:ymax, xmin:xmax]
+    if resize:
+        final_size = options["final_size"]
+        image_out = cv2.resize(image_out, final_size)
+    return image_out
+
+
+def get_tile_name(wnd, options, aug=False):
+    file_out = options["file_out"]
+    out_path = options["out_path"]
+    # if filename contains a directory split out
+    split_filename = file_out.split("/")
+    if len(split_filename) > 1:
+        file_out = split_filename[0] + '_'
+        for splt in range(1, len(split_filename)):
+            file_out = file_out + split_filename[splt] + '_'
+        # remove uneccesary extra underscore
+        file_out = file_out[:-1]
+    # create text file name and write output to text file
+    if aug:
+        aug_no = options["aug_no"]
+        out_name = file_out + '_' + str(wnd) + '_' + str(aug_no)
+    else:
+        out_name = file_out + '_' + str(wnd)
+    # get just this window from image and write it out
+    out_name = out_path + out_name
+    return out_name
+
+
+def rotate_box_array(array_in, ninety_rots):
+    # ninety rots is the number of time it will be rotated by 90 degrees, 1 for 90, 2 for 180 etc
+    clazz = array_in[:, 0]
+    xcz = array_in[:, 1]
+    ycz = array_in[:, 2]
+    widz = array_in[:, 3]
+    heiz = array_in[:, 4]
+    clazz = np.reshape(clazz, (len(clazz), 1))
+    widz = np.reshape(widz, (len(widz), 1))
+    heiz = np.reshape(heiz, (len(heiz), 1))
+    # centre position of array must be 0,0 not 0.5, 0.5
+    xcz2 = np.reshape(np.subtract(xcz, 0.5), (1, len(xcz)))
+    ycz2 = np.reshape(np.subtract(ycz, 0.5), (1, len(ycz)))
+    # convert angle to radians
+    theta = math.pi / 2 * ninety_rots
+    rot_mat = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+    pointz = np.vstack((xcz2, ycz2))
+    pointz = np.matmul(rot_mat, pointz)
+    xcz3 = (pointz[0, :] + 0.5)
+    ycz3 = (pointz[1, :] + 0.5)
+    xcz3 = np.reshape(xcz3, (len(xcz3), 1))
+    ycz3 = np.reshape(ycz3, (len(ycz3), 1))
+    if ninety_rots % 2 != 0:
+        widz2 = heiz
+        heiz2 = widz
+    else:
+        widz2 = widz
+        heiz2 = heiz
+    array_out = np.hstack((clazz, xcz3, ycz3, widz2, heiz2))
+    return array_out
+
+
+def reflect_box_array(array_in):
+    # ninety rots is the number of time it will be rotated by 90 degrees, 1 for 90, 2 for 180 etc
+    clazz = array_in[:, 0]
+    xcz = array_in[:, 1]
+    ycz = array_in[:, 2]
+    widz = array_in[:, 3]
+    heiz = array_in[:, 4]
+    clazz = np.reshape(clazz, (len(clazz), 1))
+    widz = np.reshape(widz, (len(widz), 1))
+    heiz = np.reshape(heiz, (len(heiz), 1))
+    # centre position of array must be 0,0 not 0.5, 0.5
+    xcz2 = np.reshape(np.subtract(xcz, 0.5), (len(xcz), 1))
+    ycz = np.reshape(ycz, (len(ycz), 1))
+    xcz2 = np.subtract(0, xcz2)
+    xcz3 = xcz2 + 0.5
+    array_out = np.hstack((clazz, xcz3, ycz, widz, heiz))
+    return array_out
+
+
+def write_string_from_array(array_in, out_name):
+    out_string = ""
+    for ln in range(array_in.shape[0]):
+        line = array_in[ln, :]
+        out_string = out_string + str(line[0]) + ' ' + str(line[1]) + ' ' + str(line[2]) + ' '
+        out_string = out_string + str(line[3]) + ' ' + str(line[4]) + '\n'
+    out_string = out_string[:-1]
+    txt_path = out_name + '.txt'
+    with open(txt_path, "w") as text_file:
+        text_file.write(out_string)
+
+
+def create_tiled_data(filez, fl, windowz, options, resize=False, aug=False, keep_blanks=False, vert=False, pblank=1.0):
+    base_dir = options["base_dir"]
+    data_list = options["data_list"]
+    out_path = options["out_path"]
+    image_shape = options["image_shape"]
+    size_out = options["size_out"]
+    cols = size_out[1]
+    rows = size_out[0]
+    if resize:
+        final_size = options["final_size"]
+        cols = final_size[1]
+        rows = final_size[0]
+    file_name = filez[fl]
+    print(file_name)
+    # get root of file name
+    file_out = file_name[:-4]
+    # get list of detections in this image
+    keep_list = data_list.file_loc == file_name
+    file_boxes = data_list[keep_list]
+    # get min and max positions for boxes
+    file_boxes['wid_half'] = np.divide(file_boxes.wid, 2)
+    file_boxes['hei_half'] = np.divide(file_boxes.height, 2)
+    file_boxes['xmin'] = np.subtract(file_boxes.xc, file_boxes.wid_half)
+    file_boxes['xmax'] = np.add(file_boxes.xc, file_boxes.wid_half)
+    file_boxes['ymin'] = np.subtract(file_boxes.yc, file_boxes.hei_half)
+    file_boxes['ymax'] = np.add(file_boxes.yc, file_boxes.hei_half)
+    # read in image
+    from_loc = base_dir + file_name
+    image_in = cv2.imread(from_loc, -1)
+    # need windows as both pixels and percentage windowz is in pixels so convert to percentage of image
+    wind_pct = np.array(windowz, dtype=np.float)
+    wind_pct[:, 0] = np.divide(wind_pct[:, 0], image_shape[0])
+    wind_pct[:, 1] = np.divide(wind_pct[:, 1], image_shape[1])
+    wind_pct[:, 2] = np.divide(wind_pct[:, 2], image_shape[0])
+    wind_pct[:, 3] = np.divide(wind_pct[:, 3], image_shape[1])
+    # for each window
+    for wnd in range(wind_pct.shape[0]):
+        aug_no = 0
+        # set shortnames for window position in pct
+        xminh = wind_pct[wnd, 1]
+        xmaxh = wind_pct[wnd, 3]
+        yminh = wind_pct[wnd, 0]
+        ymaxh = wind_pct[wnd, 2]
+        # set shortnames for window position in pixels
+        xminh_px = windowz[wnd, 1]
+        xmaxh_px = windowz[wnd, 3]
+        yminh_px = windowz[wnd, 0]
+        ymaxh_px = windowz[wnd, 2]
+        # min pixels for width or height in ground truth is 10 pixels
+        # min size to keep wil depend on size and shape of box.
+        # going to assume you need at least a third of the box in either direction
+        # pick 5 pixels as a minimum size of box to keep in case detection is cut in half by tiling
+        min_size_x = 5.0 / image_shape[1]
+        min_size_y = 5.0 / image_shape[0]
+        min_pct = 3
+        # for each detection
+        # set output for text file
+        dict_horiz_pct = {"xmin": xminh, "xmax": xmaxh, "ymin": yminh, "ymax": ymaxh,
+                          "min_size_x": min_size_x, "min_size_y": min_size_y, "min_pct": min_pct}
+        dict_horiz_pix = {"xmin": xminh_px, "xmax": xmaxh_px, "ymin": yminh_px, "ymax": ymaxh_px,
+                          "min_size_x": min_size_x, "min_size_y": min_size_y, "min_pct": min_pct}
+        dict_out_name = {"file_out": file_out, "out_path": out_path, "aug_no": aug_no}
+
+        out_string_horiz, out_array_horiz = get_detect_in_wind(file_boxes, dict_horiz_pct)
+        if resize:
+            if vert:
+                dict_horiz_pix["final_size"] = (final_size[1], final_size[0])
+            else:
+                dict_horiz_pix["final_size"] = final_size
+        image_horiz = get_tile_image(image_in, dict_horiz_pix, resize=resize)
+
+        if keep_blanks:
+            keep = random.random() < pblank
+            if len(out_string_horiz) > 0:
+                tile_name = get_tile_name(wnd, dict_out_name, aug=aug)
+                cv2.imwrite(tile_name + '.png', image_horiz)
+                write_txt_file(out_string_horiz, tile_name)
+            else:
+                if keep:
+                    tile_name = get_tile_name(wnd, dict_out_name, aug=aug)
+                    cv2.imwrite(tile_name + '.png', image_horiz)
+                    blank_txt_file(tile_name)
+        else:
+            if len(out_string_horiz) > 0:
+                if not vert:
+                    tile_name = get_tile_name(wnd, dict_out_name, aug=aug)
+                    cv2.imwrite(tile_name + '.png', image_horiz)
+                    write_txt_file(out_string_horiz, tile_name)
+                if aug:
+                    if vert:
+                        rot_ninety = cv2.getRotationMatrix2D((cols / 2, rows / 2), 90, 1)
+                        # need to adjust matrix to take into account translation when changing image size
+                        # otherwise will be at top left of where image was
+                        rot_ninety[0, 2] += (rows / 2) - cols / 2
+                        rot_ninety[1, 2] += (cols / 2) - rows / 2
+                        image_horiz = cv2.warpAffine(image_horiz, rot_ninety, (rows, cols))
+                        out_array_horiz = rotate_box_array(out_array_horiz, 1)
+                        aug_no = 4
+                        dict_out_name["aug_no"] = aug_no
+                        tile_name = get_tile_name(wnd, dict_out_name, aug=aug)
+                        cv2.imwrite(tile_name + '.png', image_horiz)
+                        write_string_from_array(out_array_horiz, tile_name)
+                    rot_oneeighty = cv2.getRotationMatrix2D((rows / 2, cols / 2), 180, 1)
+                    # write out image rotated by 180 degrees
+                    aug_no = aug_no + 1
+                    dict_out_name["aug_no"] = aug_no
+                    tile_name = get_tile_name(wnd, dict_out_name, aug=aug)
+                    image_rot = cv2.warpAffine(image_horiz, rot_oneeighty, (rows, cols))
+                    cv2.imwrite(tile_name + '.png', image_rot)
+                    array_rot = rotate_box_array(out_array_horiz, 2)
+                    write_string_from_array(array_rot, tile_name)
+                    # write out reflected image
+                    aug_no = aug_no + 1
+                    dict_out_name["aug_no"] = aug_no
+                    tile_name = get_tile_name(wnd, dict_out_name, aug=aug)
+                    image_reflect = cv2.flip(image_horiz, 1)
+                    cv2.imwrite(tile_name + '.png', image_reflect)
+                    array_reflect = reflect_box_array(out_array_horiz)
+                    write_string_from_array(array_reflect, tile_name)
+                    # write out reflected and rotated image
+                    aug_no = aug_no + 1
+                    dict_out_name["aug_no"] = aug_no
+                    tile_name = get_tile_name(wnd, dict_out_name, aug=aug)
+                    image_ref_rot = cv2.warpAffine(image_reflect, rot_oneeighty, (rows, cols))
+                    cv2.imwrite(tile_name + '.png', image_ref_rot)
+                    array_ref_rot = rotate_box_array(array_reflect, 2)
+                    write_string_from_array(array_ref_rot, tile_name)
+
+
+def create_windows(size_out, input_shape, overlap):
+    # overlap is number of images that overlap so 2 will give 50% overlap of images
+    row_st = 0
+    row_ed = size_out[0]
+    gfrcrowst = []
+    gfrcrowed = []
+    while row_ed < input_shape[0]:
+        gfrcrowst.append(row_st)
+        gfrcrowed.append(row_ed)
+        row_st = int(row_st + size_out[0] / overlap)
+        row_ed = int(row_st + size_out[0])
+    row_ed = input_shape[0]
+    row_st = row_ed - size_out[0]
+    gfrcrowst.append(row_st)
+    gfrcrowed.append(row_ed)
+    col_st = 0
+    col_ed = size_out[1]
+    gfrccolst = []
+    gfrccoled = []
+    while col_ed < input_shape[1]:
+        gfrccolst.append(col_st)
+        gfrccoled.append(col_ed)
+        col_st = int(col_st + size_out[1] / overlap)
+        col_ed = int(col_st + size_out[1])
+    col_ed = input_shape[1]
+    col_st = col_ed - size_out[1]
+    gfrccolst.append(col_st)
+    gfrccoled.append(col_ed)
+    nrow = len(gfrcrowst)
+    ncol = len(gfrccolst)
+    gfrcrowst = np.reshape(np.tile(gfrcrowst, ncol), (nrow * ncol, 1))
+    gfrcrowed = np.reshape(np.tile(gfrcrowed, ncol), (nrow * ncol, 1))
+    gfrccolst = np.reshape(np.repeat(gfrccolst, nrow), (nrow * ncol, 1))
+    gfrccoled = np.reshape(np.repeat(gfrccoled, nrow), (nrow * ncol, 1))
+    gfrcwindz = np.hstack((gfrcrowst, gfrccolst, gfrcrowed, gfrccoled))
+    gfrcwindz = np.array(gfrcwindz, dtype=np.int)
+    return gfrcwindz
+
+
+def create_list_file(outpath, outfile):
+    # create train.txt list of images
+    out_folder_list = os.listdir(outpath)
+    train_string = "img_name,gt_details\n"
+    for ff in range(len(out_folder_list)):
+        filename = out_folder_list[ff]
+        if filename[-4:] == ".png":
+            train_string = train_string + filename + ','
+        if filename[-4:] == ".txt":
+            train_string = train_string + filename + '\n'
+    # remove unecesary last line separator
+    train_string = train_string[:-1]
+    # write out file
+    train_txt_path = outpath + outfile
+    with open(train_txt_path, "w") as textfile:
+        textfile.write(train_string)
+
+
+# GFRC input
+# Directory with files
+basedir = 'E:/'
+# type of input
+type = 'train'
+# List of boxes
+csv_name = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '_GFRC_bboxes.csv'
+# folder to save in
+out_folder = 'CF_Calcs/BenchmarkSets/GFRC/yolo_copy_' + type + '_all_img/'
+# output list file
+out_file = "gfrc_" + type + ".txt"
+# Set options
+resize = True
+if type == 'test':
+    kb = True
+    aug = False
+    vert = False
+else:
+    kb = True
+    aug = False
+    vert = False
+prob_blank = 0.01
+# Set sizes
+input_shape = [4912, 7360]
+size_out = [192, 288]
+pct_overlap = 1
+resize_mult = 2
+
+
+# Full path csv
+csv_file = basedir + csv_name
+# Read in csv file
+datalist = pd.read_csv(csv_file)
+# Get list of unique filenames
+filez_in = np.unique(datalist.file_loc)
+# Full path to save
+outpath = basedir + out_folder
+
+# calculate derived sizes
+size_out_vert = [size_out[1], size_out[0]]
+overlap = 1 / pct_overlap
+
+# create array of window locations
+gfrcwindz = create_windows(size_out, input_shape, overlap)
+
+# create input for tiling
+dict4tiling = {"base_dir": basedir, "data_list": datalist, "out_path": outpath, "image_shape": input_shape,
+               "size_out": size_out}
+if resize:
+    finsize = (size_out[1] * resize_mult, size_out[0] * resize_mult)
+    dict4tiling["final_size"] = finsize
+
+for ff in range(filez_in.shape[0]):
+    create_tiled_data(filez_in, ff, gfrcwindz, dict4tiling, resize=resize, aug=aug, keep_blanks=kb, vert=False, pblank=prob_blank)
+
+if vert:
+    gfrcwindz_vert = create_windows(size_out_vert, input_shape, overlap)
+    dict4tiling["size_out"] = size_out_vert
+    for ff in range(filez_in.shape[0]):
+        create_tiled_data(filez_in, ff, gfrcwindz_vert, dict4tiling, resize=resize, aug=aug, keep_blanks=kb, vert=vert, pblank=1.0)
+
+create_list_file(outpath, out_file)
