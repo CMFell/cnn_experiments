@@ -9,10 +9,11 @@ from torch.utils.data import Dataset, DataLoader
 import warnings
 warnings.filterwarnings("ignore")
 
+
 class AnimalBoundBoxDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, root_dir, transform=None):
+    def __init__(self, root_dir, inputvec, anchors, transform=None):
         """
         Args:
             root_dir (string): Directory with all the images.
@@ -37,8 +38,9 @@ class AnimalBoundBoxDataset(Dataset):
         bndbxs_name = self.root_dir + self.files_list[idx] + ".txt"
         bndbxs = pd.read_csv(bndbxs_name, sep=' ', header=None)
         bndbxs = bndbxs.astype('float')
-        bndbx_pad = pd.DataFrame(np.empty((14-bndbxs.shape[0], 5)))
+        bndbx_pad = pd.DataFrame(np.zeros((14-bndbxs.shape[0], 5)))
         bndbxs = pd.concat([bndbxs, bndbx_pad])
+
         sample = {'image': image, 'bndbxs': bndbxs}
 
         if self.transform:
@@ -46,6 +48,58 @@ class AnimalBoundBoxDataset(Dataset):
 
         return sample
 
+
+class MakeMat(object):
+
+    def __init__(self, inputz, anchors):
+        self.gridw = inputz[0]
+        self.gridh = inputz[1]
+        self.nbox = inputz[2]
+        self.outlen = inputz[3]
+        self.anchors = np.reshape(anchors, [self.nbox, 2])
+
+
+    def __call__(self, sample):
+        image, bndbxs = sample['image'], sample['bndbxs']
+        y_true = np.zeros((self.gridh, self.gridw, self.nbox, self.outlen))  # desired network output
+        for row in range(bndbxs.shape[0]):
+            obj = bndbxs.iloc[row]
+            if obj[3] > 0:
+                xcell = np.int32(np.floor(obj[1] * self.gridw))
+                ycell = np.int32(np.floor(obj[2] * self.gridh))
+                centx = (obj[1] * self.gridw) - xcell
+                centy = (obj[2] * self.gridh) - ycell
+                # Calc best box compared to anchors, zero position both
+                xmin_true = 0 - obj[3] / 2
+                xmax_true = 0 + obj[3] / 2
+                ymin_true = 0 - obj[4] / 2
+                ymax_true = 0 + obj[4] / 2
+                anchors_wi = np.divide(self.anchors, [self.gridw, self.gridh])
+                anc_xmin = np.subtract(0, np.divide(anchors_wi[:, 0], 2))
+                anc_xmax = np.add(0, np.divide(anchors_wi[:, 0], 2))
+                anc_ymin = np.subtract(0, np.divide(anchors_wi[:, 1], 2))
+                anc_ymax = np.add(0, np.divide(anchors_wi[:, 1], 2))
+                interxmax = np.minimum(anc_xmax, xmax_true)
+                interxmin = np.maximum(anc_xmin, xmin_true)
+                interymax = np.minimum(anc_ymax, ymax_true)
+                interymin = np.maximum(anc_ymin, ymin_true)
+                sizex = np.maximum(np.subtract(interxmax, interxmin), 0)
+                sizey = np.maximum(np.subtract(interymax, interymin), 0)
+                inter_area = np.multiply(sizex, sizey)
+                anc_area = np.multiply(anchors_wi[:, 0], anchors_wi[:, 1])
+                truth_area = np.multiply(obj[3], obj[4])
+                union_area = np.subtract(np.add(anc_area, truth_area), inter_area)
+                iou = np.divide(inter_area, union_area)
+                best_box = np.argmax(iou)
+                out_vec = np.zeros(self.outlen)
+                # I think this should be this
+                out_vec[0:5] = [centx, centy, obj[3], obj[4], 1.0]
+                # out_vec[0:5] = [obj[1], obj[2], obj[3], obj[4], 1]
+                class_pos = np.int32(5 + obj[0])
+                out_vec[class_pos] = 1.
+                y_true[ycell, xcell, best_box, :] = out_vec
+
+        return {'image': image, 'bndbxs': bndbxs, 'y_true': y_true}
 
 
 class Rescale(object):
@@ -160,7 +214,7 @@ class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, sample):
-        image, bndbxs = sample['image'], sample['bndbxs']
+        image, bndbxs, ytrue = sample['image'], sample['bndbxs'], sample['y_true']
         bndbxs = bndbxs.values
         # swap color axis because
         # numpy image: H x W x C
@@ -168,6 +222,6 @@ class ToTensor(object):
         image = image.transpose((2, 0, 1))
         image = torch.from_numpy(image).type(torch.FloatTensor)
         bndbxs = torch.from_numpy(bndbxs).type(torch.FloatTensor)
-        output = {'image': image, 'bndbxs': bndbxs}
+        ytrue = torch.from_numpy(ytrue).type(torch.FloatTensor)
+        output = {'image': image, 'bndbxs': bndbxs, 'y_true': ytrue}
         return output
-
