@@ -12,8 +12,8 @@ def accuracy(y_pred, y_true, thresh):
     negz = torch.lt(predconf, thresh)
     truez = torch.ge(ones, thresh)
     falsez = torch.lt(ones, thresh)
-    tp = torch.sum(np.logical_and(poz, truez))
-    fp = torch.sum(np.logical_and(poz, falsez))
-    fn = torch.sum(np.logical_and(negz, truez))
+    tp = torch.sum(poz & truez)
+    fp = torch.sum(poz & falsez)
+    fn = torch.sum(negz & truez)
 
     return tp, fp, fn

@@ -7,6 +7,7 @@ class YoloLoss(torch.nn.Module):
         super(YoloLoss, self).__init__()
 
     def forward(self, outputs, samp_bndbxs, y_true, anchors, no_obj_thresh, scalez, cell_grid):
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         # reshape outputs to separate anchor boxes
         outputs = outputs.unsqueeze(4)
         outputs = torch.chunk(outputs, 5, dim=3)
@@ -31,6 +32,7 @@ class YoloLoss(torch.nn.Module):
         ### get cell grid
         batchsz, gridh, gridw, ankz, finsiz = outputs.size()
         grid_trch = torch.from_numpy(np.array([gridw, gridh])).type(torch.FloatTensor)
+        grid_trch = grid_trch.to(device)
         anchors1 = anchors.unsqueeze(0)
         anchors1 = anchors1.unsqueeze(0)
         anchors1 = anchors1.unsqueeze(0)
@@ -39,8 +41,10 @@ class YoloLoss(torch.nn.Module):
         ### Convert truth for noones.
         true_xy_wi = samp_bndbxs[..., 1:3]
         true_wh_wi = samp_bndbxs[..., 3:5]
-        true_xy_wi = torch.where(bndbxs_mask4, true_xy_wi, torch.zeros(true_xy_wi.size()))
-        true_wh_wi = torch.where(bndbxs_mask4, true_wh_wi, torch.zeros(true_xy_wi.size()))
+        zeros_replace = torch.zeros(true_xy_wi.size())
+        zeros_replace = zeros_replace.to(device)
+        true_xy_wi = torch.where(bndbxs_mask4, true_xy_wi, zeros_replace)
+        true_wh_wi = torch.where(bndbxs_mask4, true_wh_wi, zeros_replace)
         true_xy_wi = true_xy_wi.unsqueeze(1)
         true_xy_wi = true_xy_wi.unsqueeze(1)
         true_xy_wi = true_xy_wi.unsqueeze(1)
@@ -60,17 +64,18 @@ class YoloLoss(torch.nn.Module):
         pred_maxes2 = torch.add(pred_xy_wi1, pred_wh_half2)
 
         bndbxs_mask3 = bndbxs_mask2.unsqueeze(5)
-        #bndbxs_mask3 = torch.cat([bndbxs_mask3, bndbxs_mask3], dim=5)
-        zeros_replace = torch.zeros(true_mins2.size())
-        true_mins3 = torch.where(bndbxs_mask3, true_mins2, zeros_replace)
-        true_maxes3 = torch.where(bndbxs_mask3, true_maxes2, zeros_replace)
+        zeros_replace2 = torch.zeros(true_mins2.size())
+        zeros_replace2 = zeros_replace2.to(device)
+        true_mins3 = torch.where(bndbxs_mask3, true_mins2, zeros_replace2)
+        true_maxes3 = torch.where(bndbxs_mask3, true_maxes2, zeros_replace2)
         #true_mins3 = true_mins3.double()
         #true_maxes3 = true_maxes3.double()
         intersect_mins2 = torch.max(pred_mins2, true_mins3)
         intersect_maxes2 = torch.min(pred_maxes2, true_maxes3)
         intersect_wh2 =  intersect_maxes2 - intersect_mins2
-        zeros_replace2 = torch.zeros(intersect_wh2.size())
-        intersect_wh2 = torch.max(intersect_wh2, zeros_replace2)
+        zeros_replace3 = torch.zeros(intersect_wh2.size())
+        zeros_replace3 = zeros_replace3.to(device)
+        intersect_wh2 = torch.max(intersect_wh2, zeros_replace3)
         intersect_areas2 = torch.mul(intersect_wh2[..., 0], intersect_wh2[..., 1])
 
         true_areas2 = torch.mul(true_wh_wi[..., 0], true_wh_wi[..., 1])
@@ -79,8 +84,9 @@ class YoloLoss(torch.nn.Module):
         union_areas2 = torch.add((torch.add(pred_areas2, true_areas2) - intersect_areas2), 0.00001)
         iou_scores_all = torch.div(intersect_areas2, union_areas2)
 
-        zeros_replace3 = torch.zeros(iou_scores_all.size())
-        iou_scores_all = torch.where(bndbxs_mask2, iou_scores_all, zeros_replace3)
+        zeros_replace4 = torch.zeros(iou_scores_all.size())
+        zeros_replace4 = zeros_replace4.to(device)
+        iou_scores_all = torch.where(bndbxs_mask2, iou_scores_all, zeros_replace4)
         best_ious = torch.max(iou_scores_all, dim=4)
         best_ious = best_ious.values
 
@@ -110,8 +116,9 @@ class YoloLoss(torch.nn.Module):
 
         intersect_mins = torch.max(pred_mins, true_mins)
         intersect_maxes = torch.min(pred_maxes, true_maxes)
-        zeros_replace4 = torch.zeros(intersect_maxes.size())
-        intersect_wh = torch.max((intersect_maxes - intersect_mins), zeros_replace4)
+        zeros_replace5 = torch.zeros(intersect_maxes.size())
+        zeros_replace5 = zeros_replace5.to(device)
+        intersect_wh = torch.max((intersect_maxes - intersect_mins), zeros_replace5)
         intersect_areas = torch.mul(intersect_wh[..., 0], intersect_wh[..., 1])
 
         pred_areas = torch.mul(pred_wh_wi[..., 0], pred_wh_wi[..., 1])
@@ -133,15 +140,18 @@ class YoloLoss(torch.nn.Module):
         loss_conf = torch.mul(loss_conf, obj_scale)
         loss_conf = torch.sum(loss_conf)
 
-        zeros_replace5 = torch.zeros(cf_pred.size())
-        loss_noconf = zeros_replace5 - cf_pred
+        zeros_replace6 = torch.zeros(cf_pred.size())
+        zeros_replace6 = zeros_replace6.to(device)
+        loss_noconf = zeros_replace6 - cf_pred
         loss_noconf = torch.pow(loss_noconf, 2)
         noones = noones.type(torch.FloatTensor)
+        noones = noones.to(device)
         loss_noconf = torch.mul(loss_noconf, noones)
         loss_noconf = torch.mul(loss_noconf, no_obj_scale)
         loss_noconf = torch.sum(loss_noconf)
 
         ones_replace = torch.ones(cl_pred.size())
+        ones_replace = ones_replace.to(device)
         loss_class = ones_replace - cl_pred
         loss_class = torch.pow(loss_class, 2)
         loss_class = torch.mul(loss_class, ones)
