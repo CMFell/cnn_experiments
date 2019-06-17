@@ -11,7 +11,7 @@ class YoloLoss(torch.nn.Module):
         outputs = outputs.unsqueeze(4)
         outputs = torch.chunk(outputs, 5, dim=3)
         outputs = torch.cat(outputs, dim=4)
-        outputs = outputs.transpose(4, 3)
+        outputs = outputs.transpose(3, 4)
         # split to get individual outputs
         xy_pred = torch.sigmoid(outputs[..., 0:2])
         wh_pred = outputs[..., 2:4]
@@ -71,7 +71,7 @@ class YoloLoss(torch.nn.Module):
         intersect_wh2 =  intersect_maxes2 - intersect_mins2
         zeros_replace2 = torch.zeros(intersect_wh2.size())
         intersect_wh2 = torch.max(intersect_wh2, zeros_replace2)
-        intersect_areas2 = np.multiply(intersect_wh2[..., 0], intersect_wh2[..., 1])
+        intersect_areas2 = torch.mul(intersect_wh2[..., 0], intersect_wh2[..., 1])
 
         true_areas2 = torch.mul(true_wh_wi[..., 0], true_wh_wi[..., 1])
         pred_areas2 = torch.mul(pred_wh_wi1[..., 0], pred_wh_wi1[..., 1])

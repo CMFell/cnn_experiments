@@ -88,6 +88,8 @@ class YoloNet(nn.Module):
         x = torch.cat((x, skip), dim=1)
         x = F.leaky_relu(self.conv21_bn(self.conv21(x)))
         x = F.leaky_relu(self.conv22(x))
+        x = x.transpose(1, 2)
+        x = x.transpose(2, 3)
         return x
 
 """
