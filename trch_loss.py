@@ -1,133 +1,217 @@
 import torch
 import numpy as np
 
+
 class YoloLoss(torch.nn.Module):
 
     def __init__(self):
         super(YoloLoss, self).__init__()
 
-    def forward(self, outputs, samp_bndbxs, y_true, anchors, no_obj_thresh, scalez, cell_grid):
+    def forward(self, outputs, samp_bndbxs, y_true, anchors, no_obj_thresh, scalez, cell_grid, ep):
+
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        # reshape outputs to separate anchor boxes
-        outputs = outputs.unsqueeze(4)
-        outputs = torch.chunk(outputs, 5, dim=3)
-        outputs = torch.cat(outputs, dim=4)
-        outputs = outputs.transpose(3, 4)
-        # split to get individual outputs
-        xy_pred = torch.sigmoid(outputs[..., 0:2])
-        wh_pred = outputs[..., 2:4]
-        cf_pred = torch.sigmoid(outputs[..., 4])
-        cl_pred = torch.sigmoid(outputs[..., 5:])
-        cl_pred = cl_pred.squeeze()
 
-        ### get mask of which areas are zero
-        wh_gt = samp_bndbxs[:, :, 2]
-        wh_gt[wh_gt == float('inf')] = 0
-        bndbxs_mask = torch.gt(wh_gt, 0.0001)
-        bndbxs_mask4 = bndbxs_mask.unsqueeze(2)
-        bndbxs_mask2 = bndbxs_mask.unsqueeze(1)
-        bndbxs_mask2 = bndbxs_mask2.unsqueeze(1)
-        bndbxs_mask2 = bndbxs_mask2.unsqueeze(1)
+        def reshape_ypred(outputz):
+            # reshape outputs to separate anchor boxes
+            outputz = outputz.unsqueeze(4)
+            outputz = torch.chunk(outputz, 5, dim=3)
+            outputz = torch.cat(outputz, dim=4)
+            outputz = outputz.transpose(3, 4)
+            return outputz
 
-        ### get cell grid
-        batchsz, gridh, gridw, ankz, finsiz = outputs.size()
+        def split_preds(outputz):
+            # split to get individual outputs
+            xypred = torch.sigmoid(outputz[..., 0:2])
+            whpred = outputz[..., 2:4]
+            cfpred = torch.sigmoid(outputz[..., 4])
+            clpred = torch.sigmoid(outputz[..., 5:])
+            clpred = clpred.squeeze()
+            return xypred, whpred, cfpred, clpred
+
+        def create_bndbx_masks(sampbndbxs):
+            # get mask of which areas are zero
+            wh_gt = sampbndbxs[:, :, 2]
+            wh_gt[wh_gt == float('inf')] = 0
+            bndbxsmask = torch.gt(wh_gt, 0.0001)
+            bndbxsmask4 = bndbxsmask.unsqueeze(2)
+            bndbxsmask2 = bndbxsmask.unsqueeze(1)
+            bndbxsmask2 = bndbxsmask2.unsqueeze(1)
+            bndbxsmask2 = bndbxsmask2.unsqueeze(1)
+
+            return bndbxsmask, bndbxsmask2, bndbxsmask4
+
+        # Convert truth for noones.
+        def get_true_wi(sampbndbxs, bndbxsmask4):
+            truexywi = sampbndbxs[..., 1:3]
+            truewhwi = sampbndbxs[..., 3:5]
+            zerosreplace = torch.zeros(truexywi.size())
+            zerosreplace = zerosreplace.to(device)
+            truexywi = torch.where(bndbxsmask4, truexywi, zerosreplace)
+            truewhwi = torch.where(bndbxsmask4, truewhwi, zerosreplace)
+            truexywi = truexywi.unsqueeze(1)
+            truexywi = truexywi.unsqueeze(1)
+            truexywi = truexywi.unsqueeze(1)
+            truewhwi = truewhwi.unsqueeze(1)
+            truewhwi = truewhwi.unsqueeze(1)
+            truewhwi = truewhwi.unsqueeze(1)
+            return truexywi, truewhwi
+
+        def get_noones_mask(predxywi, predwhwi, truexywi, truewhwi, bndbxsmask):
+
+            truewhhalf2 = torch.div(truewhwi, 2.0)
+            truemins2 = truexywi - truewhhalf2
+            truemaxes2 = torch.add(truexywi, truewhhalf2)
+            bndbxsmask2 = bndbxsmask.unsqueeze(5)
+            zerosreplace = torch.zeros(truemins2.size())
+            zerosreplace = zerosreplace.to(device)
+            truemins2 = torch.where(bndbxsmask2, truemins2, zerosreplace)
+            truemaxes2 = torch.where(bndbxsmask2, truemaxes2, zerosreplace)
+
+            predxywi = predxywi.unsqueeze(4)
+            predwhwi = predwhwi.unsqueeze(4)
+            predwhhalf2 = torch.div(predwhwi, 2.)
+            predmins2 = predxywi - predwhhalf2
+            predmaxes2 = torch.add(predxywi, predwhhalf2)
+
+            intersectmins2 = torch.max(predmins2, truemins2)
+            intersectmaxes2 = torch.min(predmaxes2, truemaxes2)
+            intersectwh2 = intersectmaxes2 - intersectmins2
+            zerosreplace2 = torch.zeros(intersectwh2.size())
+            zerosreplace2 = zerosreplace2.to(device)
+            intersectwh2 = torch.max(intersectwh2, zerosreplace2)
+            intersectareas2 = torch.mul(intersectwh2[..., 0], intersectwh2[..., 1])
+
+            trueareas2 = torch.mul(truewhwi[..., 0], truewhwi[..., 1])
+            predareas2 = torch.mul(predwhwi[..., 0], predwhwi[..., 1])
+
+            unionareas2 = torch.add((torch.add(predareas2, trueareas2) - intersectareas2), 0.00001)
+            iouscoresall = torch.div(intersectareas2, unionareas2)
+
+            zerosreplace3 = torch.zeros(iouscoresall.size())
+            zerosreplace3 = zerosreplace3.to(device)
+            iouscoresall = torch.where(bndbxsmask, iouscoresall, zerosreplace3)
+            bestious = torch.max(iouscoresall, dim=4)
+            bestious = bestious.values
+            print("best iou", round(torch.max(bestious).item(), 2))
+
+            # create masks ones and no ones
+            noones = torch.lt(bestious, no_obj_thresh)
+
+            return noones
+
+        def warm_select(epin, warmmat, truemat):
+            ep_chk = torch.zeros(truemat.size())
+            ep_chk = ep_chk.fill_(epin)
+            ep_chk = torch.lt(ep_chk, 0.0)
+            ep_chk = ep_chk.to(device)
+            truemat = torch.where(ep_chk, warmmat, truemat)
+            return truemat
+
+        def process_ytrue_mat(ytrue, cellgrid, gridtrch, anchorz, epin):
+            # get x and y relative to box
+            truexy = ytrue[..., 0:2]
+            # adjust to relative to whole image
+            truexywi = torch.div(torch.add(truexy, cellgrid), gridtrch)
+            warmxy = torch.empty(truexy.size()).to(device)
+            warmxy = warmxy.fill_(0.5)
+            warmxywi = torch.div(torch.add(warmxy, cellgrid), gridtrch)
+            # truexy = warm_select(epin, warmxy, truexy)
+            # truexywi = warm_select(epin, warmxywi, truexywi)
+
+            # get w and h
+            truewhwi = ytrue[..., 2:4]
+            # adjust w and h
+            truewh = torch.div(torch.mul(truewhwi, gridtrch), anchorz)
+            truewh_mask = torch.gt(truewh, 0.000001).type(torch.FloatTensor).to(device)
+            truewh = torch.log(torch.add(truewh, 0.000001))
+            truewh = torch.mul(truewh, truewh_mask)
+            warmwh = torch.zeros(truewh.size()).to(device)
+            warmwhwi = torch.ones(truewhwi.size()).to(device)
+            warmwhwi = torch.div(torch.mul(warmwhwi, anchorz), gridtrch)
+            # truewh = warm_select(epin, warmwh, truewh)
+            # truewhwi = warm_select(epin, warmwhwi, truewhwi)
+
+            return truexy, truewh, truexywi, truewhwi
+
+        def get_iou_mat(truexywimat, truewhwimat, predxywi, predwhwi):
+            # adjust confidence
+            truewhhalf = torch.div(truewhwimat, 2.)
+            zeros_replace = torch.zeros(truexywimat.size()).to(device)
+            truemins = truexywimat - truewhhalf
+            # truemins = torch.max(truemins, zeros_replace)
+            ones_replace = torch.ones(truexywimat.size()).to(device)
+            truemaxes = torch.add(truexywimat, truewhhalf)
+            # truemaxes = torch.min(truemaxes, ones_replace)
+            trueareas = truemaxes - truemins
+            trueareas = torch.mul(trueareas[..., 0], trueareas[..., 1])
+
+            predwhhalf = torch.div(predwhwi, 2.)
+            predmins = predxywi - predwhhalf
+            # predmins = torch.max(predmins, zeros_replace)
+            predmaxes = torch.add(predxywi, predwhhalf)
+            predmaxes = torch.min(predmaxes, ones_replace)
+
+            intersectmins = torch.max(predmins, truemins)
+            intersectmaxes = torch.min(predmaxes, truemaxes)
+            zeros_replace2 = torch.zeros(intersectmaxes.size())
+            zeros_replace2 = zeros_replace2.to(device)
+            intersectwh = torch.max((intersectmaxes - intersectmins), zeros_replace2)
+            intersectareas = torch.mul(intersectwh[..., 0], intersectwh[..., 1])
+
+            predareas = predmaxes - predmins
+            predareas = torch.mul(predareas[..., 0], predareas[..., 1])
+
+            # add a small amount to avoid divide by zero, will later be multiplied by zero
+            unionareas = torch.add((torch.add(predareas, trueareas) - intersectareas), 0.00001)
+            iouscores = torch.div(intersectareas, unionareas)
+
+            return iouscores
+
+        # Reshape predictions
+        y_pred = reshape_ypred(outputs)
+
+        # Define basic values
+        batchsz, gridh, gridw, ankz, finsiz = y_pred.size()
         grid_trch = torch.from_numpy(np.array([gridw, gridh])).type(torch.FloatTensor)
         grid_trch = grid_trch.to(device)
         anchors1 = anchors.unsqueeze(0)
         anchors1 = anchors1.unsqueeze(0)
         anchors1 = anchors1.unsqueeze(0)
+        bndbxs_mask, bndbxs_mask2, bndbxs_mask4 = create_bndbx_masks(samp_bndbxs)
+
+        # Process Predictions
+        xy_pred, wh_pred, cf_pred, cl_pred = split_preds(y_pred)
+        print("xy", round(torch.max(xy_pred).item(), 2), round(torch.min(xy_pred).item(), 2),
+              "wh", round(torch.max(wh_pred).item(), 2), round(torch.min(wh_pred).item(), 2),
+              "cf", round(torch.max(cf_pred).item(), 2), round(torch.min(cf_pred).item(), 2),
+              "cl", round(torch.max(cl_pred).item(), 2), round(torch.min(cl_pred).item(), 2))
+
+        # Get predictions on whole image
         pred_xy_wi = torch.div(torch.add(xy_pred, cell_grid), grid_trch)
         pred_wh_wi = torch.div(torch.mul(torch.exp(wh_pred), anchors1), grid_trch)
-        ### Convert truth for noones.
-        true_xy_wi = samp_bndbxs[..., 1:3]
-        true_wh_wi = samp_bndbxs[..., 3:5]
-        zeros_replace = torch.zeros(true_xy_wi.size())
-        zeros_replace = zeros_replace.to(device)
-        true_xy_wi = torch.where(bndbxs_mask4, true_xy_wi, zeros_replace)
-        true_wh_wi = torch.where(bndbxs_mask4, true_wh_wi, zeros_replace)
-        true_xy_wi = true_xy_wi.unsqueeze(1)
-        true_xy_wi = true_xy_wi.unsqueeze(1)
-        true_xy_wi = true_xy_wi.unsqueeze(1)
-        true_wh_wi = true_wh_wi.unsqueeze(1)
-        true_wh_wi = true_wh_wi.unsqueeze(1)
-        true_wh_wi = true_wh_wi.unsqueeze(1)
 
-        true_wh_half2 = torch.div(true_wh_wi, 2.0)
-        true_mins2 = true_xy_wi - true_wh_half2
-        true_maxes2 = torch.add(true_xy_wi, true_wh_half2)
+        # get whole image truths and no ones matrix from list of bound boxes
+        true_xy_wi_list, true_wh_wi_list = get_true_wi(samp_bndbxs, bndbxs_mask4)
+        no_ones = get_noones_mask(pred_xy_wi, pred_wh_wi, true_xy_wi_list, true_wh_wi_list, bndbxs_mask2)
 
-        pred_xy_wi1 = pred_xy_wi.unsqueeze(4)
-        pred_wh_wi1 = pred_wh_wi.unsqueeze(4)
+        # get true values and whole image values from true matrix
+        true_xy, true_wh, true_xy_wi_mat, true_wh_wi_mat = process_ytrue_mat(y_true, cell_grid, grid_trch, anchors1, ep)
+        print("true_xy", round(torch.max(true_xy).item(), 2), round(torch.min(true_xy).item(), 2),
+              "true_wh", round(torch.max(true_wh).item(), 2), round(torch.min(true_wh).item(), 2),
+              "true_xy_wi_mat", round(torch.max(true_xy_wi_mat).item(), 2),
+              "true_wh_wi_mat", round(torch.max(true_wh_wi_mat).item(), 2))
 
-        pred_wh_half2 = torch.div(pred_wh_wi1, 2.)
-        pred_mins2 = pred_xy_wi1 - pred_wh_half2
-        pred_maxes2 = torch.add(pred_xy_wi1, pred_wh_half2)
-
-        bndbxs_mask3 = bndbxs_mask2.unsqueeze(5)
-        zeros_replace2 = torch.zeros(true_mins2.size())
-        zeros_replace2 = zeros_replace2.to(device)
-        true_mins3 = torch.where(bndbxs_mask3, true_mins2, zeros_replace2)
-        true_maxes3 = torch.where(bndbxs_mask3, true_maxes2, zeros_replace2)
-        #true_mins3 = true_mins3.double()
-        #true_maxes3 = true_maxes3.double()
-        intersect_mins2 = torch.max(pred_mins2, true_mins3)
-        intersect_maxes2 = torch.min(pred_maxes2, true_maxes3)
-        intersect_wh2 =  intersect_maxes2 - intersect_mins2
-        zeros_replace3 = torch.zeros(intersect_wh2.size())
-        zeros_replace3 = zeros_replace3.to(device)
-        intersect_wh2 = torch.max(intersect_wh2, zeros_replace3)
-        intersect_areas2 = torch.mul(intersect_wh2[..., 0], intersect_wh2[..., 1])
-
-        true_areas2 = torch.mul(true_wh_wi[..., 0], true_wh_wi[..., 1])
-        pred_areas2 = torch.mul(pred_wh_wi1[..., 0], pred_wh_wi1[..., 1])
-
-        union_areas2 = torch.add((torch.add(pred_areas2, true_areas2) - intersect_areas2), 0.00001)
-        iou_scores_all = torch.div(intersect_areas2, union_areas2)
-
-        zeros_replace4 = torch.zeros(iou_scores_all.size())
-        zeros_replace4 = zeros_replace4.to(device)
-        iou_scores_all = torch.where(bndbxs_mask2, iou_scores_all, zeros_replace4)
-        best_ious = torch.max(iou_scores_all, dim=4)
-        best_ious = best_ious.values
-
-        # create masks ones and no ones
-        noones = torch.lt(best_ious, no_obj_thresh)
-
-        # get x and y relative to whole image
-        true_box_xy_wi = y_true[..., 0:2]
-        # adjust to relative to box
-        true_box_xy = torch.div(torch.add(true_box_xy_wi, cell_grid), grid_trch)
-
-        # get w and h
-        true_box_wh_wi = y_true[..., 2:4]
-        # adjust w and h
-        true_box_wh = torch.div(torch.mul(true_box_wh_wi, grid_trch), anchors1)
-        true_box_wh = torch.log(torch.add(true_box_wh, 0.000001))
-
-        # adjust confidence
-        true_wh_half = torch.div(true_box_wh_wi, 2.)
-        true_mins = true_box_xy_wi - true_wh_half
-        true_maxes = torch.add(true_box_xy_wi, true_wh_half)
-        true_areas = torch.mul(true_box_wh_wi[..., 0], true_box_wh_wi[..., 1])
-
-        pred_wh_half = torch.div(pred_wh_wi, 2.)
-        pred_mins = pred_xy_wi - pred_wh_half
-        pred_maxes = torch.add(pred_xy_wi, pred_wh_half)
-
-        intersect_mins = torch.max(pred_mins, true_mins)
-        intersect_maxes = torch.min(pred_maxes, true_maxes)
-        zeros_replace5 = torch.zeros(intersect_maxes.size())
-        zeros_replace5 = zeros_replace5.to(device)
-        intersect_wh = torch.max((intersect_maxes - intersect_mins), zeros_replace5)
-        intersect_areas = torch.mul(intersect_wh[..., 0], intersect_wh[..., 1])
-
-        pred_areas = torch.mul(pred_wh_wi[..., 0], pred_wh_wi[..., 1])
-
-        # add a small amount to avoid divide by zero, will later be multiplied by zero
-        union_areas = torch.add((torch.add(pred_areas, true_areas) - intersect_areas), 0.00001)
-        iou_scores = torch.div(intersect_areas, union_areas)
+        iou_scores = get_iou_mat(true_xy_wi_mat, true_wh_wi_mat, pred_xy_wi, pred_wh_wi)
 
         ones = y_true[..., 4]
+        #warm_ones = torch.zeros(ones.size()).to(device)
+        #warm_ones = warm_ones.fill_(0.01)
+        #ones = warm_select(ep, warm_ones, ones)
+        print(ones.size())
+        print(ones[0, 0, 0, :])
+
+        print("xywi", round(torch.max(pred_xy_wi).item(), 2), round(torch.min(pred_xy_wi).item(), 2),
+              "whwi", round(torch.max(pred_wh_wi).item(), 2), round(torch.min(pred_wh_wi).item(), 2))
 
         obj_scale = scalez[0]
         no_obj_scale = scalez[1]
@@ -144,9 +228,12 @@ class YoloLoss(torch.nn.Module):
         zeros_replace6 = zeros_replace6.to(device)
         loss_noconf = zeros_replace6 - cf_pred
         loss_noconf = torch.pow(loss_noconf, 2)
-        noones = noones.type(torch.FloatTensor)
-        noones = noones.to(device)
-        loss_noconf = torch.mul(loss_noconf, noones)
+        no_ones = no_ones.type(torch.FloatTensor)
+        no_ones = no_ones.to(device)
+        #warm_noones = torch.zeros(no_ones.size()).type(torch.FloatTensor)
+        #warm_noones = warm_noones.to(device)
+        #no_ones = warm_select(ep, warm_noones, no_ones)
+        loss_noconf = torch.mul(loss_noconf, no_ones)
         loss_noconf = torch.mul(loss_noconf, no_obj_scale)
         loss_noconf = torch.sum(loss_noconf)
 
@@ -160,38 +247,49 @@ class YoloLoss(torch.nn.Module):
 
         ones = ones.unsqueeze(4)
 
-        loss_xy = torch.pow((true_box_xy - xy_pred), 2)
+        loss_xy = torch.pow((true_xy - xy_pred), 2)
         loss_xy = torch.mul(loss_xy, ones)
         loss_xy = torch.mul(loss_xy, coord_scale)
         loss_xy = torch.sum(loss_xy)
 
-        loss_wh = torch.pow((true_box_wh - wh_pred), 2)
+        loss_wh = torch.pow((true_wh - wh_pred), 2)
         loss_wh = torch.mul(loss_wh, ones)
         loss_wh = torch.mul(loss_wh, ones)
         loss_wh = torch.sum(loss_wh)
 
-        #outz = [loss_conf, loss_noconf, loss_class, loss_wh, loss_xy]
-        loss = loss_conf + loss_noconf + loss_class + loss_wh + loss_xy
+        # outz = [loss_conf, loss_noconf, loss_class, loss_wh, loss_xy]
+        loss = loss_conf + loss_noconf + loss_wh + loss_xy # + loss_class
+        print("total loss", round(loss.item(), 2),
+              "conf", round(loss_conf.item(), 2),
+              "noconf", round(loss_noconf.item(), 2),
+              "class", round(loss_class.item(), 2),
+              "size", round(loss_wh.item(), 2),
+              "centre", round(loss_xy.item(), 2))
 
         return loss
 
 """
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 outputs = torch.randn(4, 10, 20, 30)
+outputs = outputs.to(device)
 bndbxs = np.array([0, 0.35, 0.3, 0.2, 0.25])
 bndbxs_pad = np.empty((13,5))
 bndbxs = np.vstack((bndbxs, bndbxs_pad))
 bndbxs = np.expand_dims(bndbxs, 0)
 bndbxs = np.vstack((bndbxs, bndbxs, bndbxs, bndbxs))
 bndbxs = torch.from_numpy(bndbxs).type(torch.FloatTensor)
+bndbxs = bndbxs.to(device)
 y_true = torch.zeros(4, 10, 20, 5, 6)
 y_true[0, 3, 6, 0, :] = torch.from_numpy(np.array([0.5, 0, 0.2, 0.25, 1.0, 1.0]))
 y_true[1, 3, 6, 0, :] = torch.from_numpy(np.array([0.5, 0, 0.2, 0.25, 1.0, 1.0]))
 y_true[2, 3, 6, 0, :] = torch.from_numpy(np.array([0.5, 0, 0.2, 0.25, 1.0, 1.0]))
 y_true[3, 3, 6, 0, :] = torch.from_numpy(np.array([0.5, 0, 0.2, 0.25, 1.0, 1.0]))
+y_true = y_true.to(device)
 
 anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
               [5.319540, 6.116692]]
 anchors_in = torch.from_numpy(np.array(anchors_in)).type(torch.FloatTensor)
+anchors_in = anchors_in.to(device)
 scalez = [1, 0.5, 1, 1]
 batchsz, gridh, gridw, longout = outputs.size()
 cell_x = np.reshape(np.tile(np.arange(gridw), gridh), (1, gridh, gridw, 1))
@@ -199,15 +297,16 @@ cell_y = np.reshape(np.repeat(np.arange(gridh), gridw), (1, gridh, gridw, 1))
 # combine to give grid
 cell_grid = np.tile(np.stack([cell_x, cell_y], -1), [1, 1, 1, 5, 1])
 cell_grid = torch.from_numpy(cell_grid).type(torch.FloatTensor)
+cell_grid = cell_grid.to(device)
 
 criterion = YoloLoss()
-loss = criterion(outputs, bndbxs, y_true, anchors_in, 0.3, scalez, cell_grid)
+loss = criterion(outputs, bndbxs, y_true, anchors_in, 0.3, scalez, cell_grid, 0)
 print(loss)
 
-#x = torch.zeros(10)
-#y = 1/x  # tensor with all infinities
-#print(y)
-#y[y == float('inf')] = 0
-#print(y)
+# x = torch.zeros(10)
+# y = 1/x  # tensor with all infinities
+# print(y)
+# y[y == float('inf')] = 0
+# print(y)
 
 """

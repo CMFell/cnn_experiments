@@ -2,7 +2,13 @@ import numpy as np
 import tensorflow as tf
 import math
 
-def get_weights(wt_path, nfilters, filter_in, filter_sz):
+def get_weights(wt_path):
+    filter_in = [3, 32, 64, 128, 64, 128, 256, 128, 256, 512, 256, 512, 256, 512, 1024, 512, 1024, 512, 1024,
+               1024, 3072, 1024]
+    nfilters = [32, 64, 128, 64, 128, 256, 128, 256, 512, 256, 512, 256, 512, 1024, 512, 1024, 512, 1024, 1024,
+                      1024, 1024, 55]
+    filter_sz = [3, 3, 3, 1, 3, 3, 1, 3, 3, 1, 3, 1, 3, 3, 1, 3, 1, 3, 3, 3, 3, 1]
+
     run_tot = 0
     weight_read = np.fromfile(wt_path, dtype='float32')
     print("new weight", len(weight_read))
