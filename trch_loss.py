@@ -56,7 +56,7 @@ class YoloLoss(torch.nn.Module):
             truewhwi = truewhwi.unsqueeze(1)
             return truexywi, truewhwi
 
-        def get_noones_mask(predxywi, predwhwi, truexywi, truewhwi, bndbxsmask):
+        def get_noones_mask(predxywi, predwhwi, truexywi, truewhwi, bndbxsmask, noobjthresh):
 
             truewhhalf2 = torch.div(truewhwi, 2.0)
             truemins2 = truexywi - truewhhalf2
@@ -95,14 +95,14 @@ class YoloLoss(torch.nn.Module):
             print("best iou", round(torch.max(bestious).item(), 2))
 
             # create masks ones and no ones
-            noones = torch.lt(bestious, no_obj_thresh)
+            noones = torch.lt(bestious, noobjthresh)
 
             return noones
 
         def warm_select(epin, warmmat, truemat):
             ep_chk = torch.zeros(truemat.size())
             ep_chk = ep_chk.fill_(epin)
-            ep_chk = torch.lt(ep_chk, 0.0)
+            ep_chk = torch.lt(ep_chk, 200.0)
             ep_chk = ep_chk.to(device)
             truemat = torch.where(ep_chk, warmmat, truemat)
             return truemat
@@ -115,8 +115,8 @@ class YoloLoss(torch.nn.Module):
             warmxy = torch.empty(truexy.size()).to(device)
             warmxy = warmxy.fill_(0.5)
             warmxywi = torch.div(torch.add(warmxy, cellgrid), gridtrch)
-            # truexy = warm_select(epin, warmxy, truexy)
-            # truexywi = warm_select(epin, warmxywi, truexywi)
+            #truexy = warm_select(epin, warmxy, truexy)
+            #truexywi = warm_select(epin, warmxywi, truexywi)
 
             # get w and h
             truewhwi = ytrue[..., 2:4]
@@ -128,8 +128,8 @@ class YoloLoss(torch.nn.Module):
             warmwh = torch.zeros(truewh.size()).to(device)
             warmwhwi = torch.ones(truewhwi.size()).to(device)
             warmwhwi = torch.div(torch.mul(warmwhwi, anchorz), gridtrch)
-            # truewh = warm_select(epin, warmwh, truewh)
-            # truewhwi = warm_select(epin, warmwhwi, truewhwi)
+            #truewh = warm_select(epin, warmwh, truewh)
+            #truewhwi = warm_select(epin, warmwhwi, truewhwi)
 
             return truexy, truewh, truexywi, truewhwi
 
@@ -162,7 +162,7 @@ class YoloLoss(torch.nn.Module):
             predareas = torch.mul(predareas[..., 0], predareas[..., 1])
 
             # add a small amount to avoid divide by zero, will later be multiplied by zero
-            unionareas = torch.add((torch.add(predareas, trueareas) - intersectareas), 0.00001)
+            unionareas = (torch.add(predareas, trueareas) - intersectareas)
             iouscores = torch.div(intersectareas, unionareas)
 
             return iouscores
@@ -181,6 +181,8 @@ class YoloLoss(torch.nn.Module):
 
         # Process Predictions
         xy_pred, wh_pred, cf_pred, cl_pred = split_preds(y_pred)
+        # mask = torch.ge(cf_pred, 0.5).type(torch.FloatTensor)
+        # mask = mask.unsqueeze(4).to(device)
         print("xy", round(torch.max(xy_pred).item(), 2), round(torch.min(xy_pred).item(), 2),
               "wh", round(torch.max(wh_pred).item(), 2), round(torch.min(wh_pred).item(), 2),
               "cf", round(torch.max(cf_pred).item(), 2), round(torch.min(cf_pred).item(), 2),
@@ -192,7 +194,7 @@ class YoloLoss(torch.nn.Module):
 
         # get whole image truths and no ones matrix from list of bound boxes
         true_xy_wi_list, true_wh_wi_list = get_true_wi(samp_bndbxs, bndbxs_mask4)
-        no_ones = get_noones_mask(pred_xy_wi, pred_wh_wi, true_xy_wi_list, true_wh_wi_list, bndbxs_mask2)
+        no_ones = get_noones_mask(pred_xy_wi, pred_wh_wi, true_xy_wi_list, true_wh_wi_list, bndbxs_mask2, no_obj_thresh)
 
         # get true values and whole image values from true matrix
         true_xy, true_wh, true_xy_wi_mat, true_wh_wi_mat = process_ytrue_mat(y_true, cell_grid, grid_trch, anchors1, ep)
@@ -202,13 +204,12 @@ class YoloLoss(torch.nn.Module):
               "true_wh_wi_mat", round(torch.max(true_wh_wi_mat).item(), 2))
 
         iou_scores = get_iou_mat(true_xy_wi_mat, true_wh_wi_mat, pred_xy_wi, pred_wh_wi)
+        print("iou score", round(torch.max(iou_scores).item(), 2))
 
         ones = y_true[..., 4]
-        #warm_ones = torch.zeros(ones.size()).to(device)
-        #warm_ones = warm_ones.fill_(0.01)
+        # warm_ones = torch.zeros(ones.size()).to(device)
+        warm_ones = torch.mul(ones, 0.01)
         #ones = warm_select(ep, warm_ones, ones)
-        print(ones.size())
-        print(ones[0, 0, 0, :])
 
         print("xywi", round(torch.max(pred_xy_wi).item(), 2), round(torch.min(pred_xy_wi).item(), 2),
               "whwi", round(torch.max(pred_wh_wi).item(), 2), round(torch.min(pred_wh_wi).item(), 2))
@@ -230,9 +231,10 @@ class YoloLoss(torch.nn.Module):
         loss_noconf = torch.pow(loss_noconf, 2)
         no_ones = no_ones.type(torch.FloatTensor)
         no_ones = no_ones.to(device)
-        #warm_noones = torch.zeros(no_ones.size()).type(torch.FloatTensor)
-        #warm_noones = warm_noones.to(device)
-        #no_ones = warm_select(ep, warm_noones, no_ones)
+        # warm_noones = torch.zeros(no_ones.size()).type(torch.FloatTensor)
+        # warm_noones = warm_noones.to(device)
+        # warm_noones = torch.mul(no_ones, 0.01)
+        # no_ones = warm_select(ep, warm_noones, no_ones)
         loss_noconf = torch.mul(loss_noconf, no_ones)
         loss_noconf = torch.mul(loss_noconf, no_obj_scale)
         loss_noconf = torch.sum(loss_noconf)
@@ -245,6 +247,8 @@ class YoloLoss(torch.nn.Module):
         loss_class = torch.mul(loss_class, class_scale)
         loss_class = torch.sum(loss_class)
 
+        #warm_ones = warm_ones.fill_(0.01)
+        #ones = warm_select(ep, warm_ones, ones)
         ones = ones.unsqueeze(4)
 
         loss_xy = torch.pow((true_xy - xy_pred), 2)

@@ -210,98 +210,99 @@ def yolo_output_to_box(y_pred, namez, dict_in):
 
     return output
 
+for xx in range(36):
 
-files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid832/"
-weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
+    files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid832_subset/"
+    weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
 
-save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
-save_name = "testing_save_"
-save_path = save_dir + save_name + str(34) + ".pt"
+    save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
+    save_name = "testing_save_"
+    save_path = save_dir + save_name + str(xx) + ".pt"
 
-grid_w = int(1248 / 32)
-grid_h = int(832 / 32)
-n_box = 5
-out_len = 6
-input_vec = [grid_w, grid_h, n_box, out_len]
-anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-              [5.319540, 6.116692]]
+    grid_w = int(1248 / 32)
+    grid_h = int(832 / 32)
+    n_box = 5
+    out_len = 6
+    input_vec = [grid_w, grid_h, n_box, out_len]
+    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+                  [5.319540, 6.116692]]
 
-animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid,
-                                       inputvec=input_vec,
-                                       anchors=anchors,
-                                       transform=transforms.Compose([
-                                               MakeMat(input_vec, anchors),
-                                               ToTensor()
-                                           ])
-                                       )
+    animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid,
+                                           inputvec=input_vec,
+                                           anchors=anchors,
+                                           transform=transforms.Compose([
+                                                   MakeMat(input_vec, anchors),
+                                                   ToTensor()
+                                               ])
+                                           )
 
-animalloader_valid = DataLoader(animal_dataset_valid_sm, batch_size=2, shuffle=False)
+    animalloader_valid = DataLoader(animal_dataset_valid_sm, batch_size=2, shuffle=False)
 
-layerlist = get_weights(weightspath)
+    layerlist = get_weights(weightspath)
 
-net = YoloNet(layerlist)
-net = net.to(device)
-net.load_state_dict(torch.load(save_path))
-net.eval()
+    net = YoloNet(layerlist)
+    net = net.to(device)
+    net.load_state_dict(torch.load(save_path))
+    net.eval()
 
-tptp = 0
-fpfp = 0
-fnfn = 0
-i = 0
+    tptp = 0
+    fpfp = 0
+    fnfn = 0
+    i = 0
 
-# define values for calculating loss
-input_shape = (384, 576, 3)
-anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-              [5.319540, 6.116692]]
-anchors_in = np.array(anchors_in)
-box_size = [32, 32]
-anchor_pixel = np.multiply(anchors_in, box_size)
-img_x_pix = input_shape[1]
-img_y_pix = input_shape[0]
-boxs_x = np.ceil(img_x_pix / 32)
-boxs_y = np.ceil(img_y_pix / 32)
-classes_in = 1
-lambda_c = 5.0
-lambda_no = 0.5
-batch_size = 8
-threshold = 0.5
-dict_deets = {'boxs_x': boxs_x, 'boxs_y': boxs_y, 'img_x_pix': img_x_pix, 'img_y_pix': img_y_pix,
-              'anchors': anchors_in, 'n_classes': classes_in, 'lambda_coord': lambda_c, 'lambda_noobj': lambda_no,
-              'base_dir': files_location_valid, 'batch_size': batch_size, 'threshold': threshold}
-boxes_out_all = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
-scores_out_all = []
-classes_out_all = []
+    # define values for calculating loss
+    input_shape = (384, 576, 3)
+    anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+                  [5.319540, 6.116692]]
+    anchors_in = np.array(anchors_in)
+    box_size = [32, 32]
+    anchor_pixel = np.multiply(anchors_in, box_size)
+    img_x_pix = input_shape[1]
+    img_y_pix = input_shape[0]
+    boxs_x = np.ceil(img_x_pix / 32)
+    boxs_y = np.ceil(img_y_pix / 32)
+    classes_in = 1
+    lambda_c = 5.0
+    lambda_no = 0.5
+    batch_size = 8
+    threshold = 0.5
+    dict_deets = {'boxs_x': boxs_x, 'boxs_y': boxs_y, 'img_x_pix': img_x_pix, 'img_y_pix': img_y_pix,
+                  'anchors': anchors_in, 'n_classes': classes_in, 'lambda_coord': lambda_c, 'lambda_noobj': lambda_no,
+                  'base_dir': files_location_valid, 'batch_size': batch_size, 'threshold': threshold}
+    boxes_out_all = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
+    scores_out_all = []
+    classes_out_all = []
 
 
-for data in animalloader_valid:
-    print(i)
-    # if i==1000:
-    #     break
-    images = data["image"]
-    images = images.to(device)
-    bndbxs = data["bndbxs"]
-    bndbxs = bndbxs.to(device)
-    y_true = data["y_true"]
-    y_true = y_true.to(device)
-    filen = data["name"]
-    # print("epoch", epoch, "batch", i)
-    y_pred = net(images)
-    accz = accuracy(y_pred, y_true, 0.3)
-    tptp += accz[0].data.item()
-    fpfp += accz[1].data.item()
-    fnfn += accz[2].data.item()
-    y_pred_np = y_pred.data.cpu().numpy()
-    output_img = yolo_output_to_box(y_pred_np, filen, dict_deets)
-    boxes_out_all = boxes_out_all.append(output_img[0], ignore_index=True)
-    i += 1
+    for data in animalloader_valid:
+        #print(i)
+        # if i==1000:
+        #     break
+        images = data["image"]
+        images = images.to(device)
+        bndbxs = data["bndbxs"]
+        bndbxs = bndbxs.to(device)
+        y_true = data["y_true"]
+        y_true = y_true.to(device)
+        filen = data["name"]
+        # print("epoch", epoch, "batch", i)
+        y_pred = net(images)
+        accz = accuracy(y_pred, y_true, 0.3)
+        tptp += accz[0].data.item()
+        fpfp += accz[1].data.item()
+        fnfn += accz[2].data.item()
+        y_pred_np = y_pred.data.cpu().numpy()
+        output_img = yolo_output_to_box(y_pred_np, filen, dict_deets)
+        boxes_out_all = boxes_out_all.append(output_img[0], ignore_index=True)
+        i += 1
 
-print("epoch", 34, "TP", tptp, "FP", fpfp, "FN", fnfn, "Recall", tptp / 399, "FPPI", fpfp / 131)
-output_path = save_dir + "boxes_out" + str(34) + "_full.csv"
-boxes_out_all.to_csv(output_path)
+    print("epoch", xx, "TP", tptp, "FP", fpfp, "FN", fnfn, "Recall", tptp / 399, "FPPI", fpfp / 131)
+    output_path = save_dir + "boxes_out" + str(xx) + "_full.csv"
+    boxes_out_all.to_csv(output_path)
 
-#print(boxes_out_all.shape[0])
-#print("Recall", tptp / 399)
-#print("FPPI", boxes_out_all.shape[0] / 131)
+    #print(boxes_out_all.shape[0])
+    #print("Recall", tptp / 399)
+    #print("FPPI", boxes_out_all.shape[0] / 131)
 
 
 

@@ -13,14 +13,14 @@ print(torch.cuda.is_available())
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # files_location = "C:/Users/kryzi/OneDrive - University of St Andrews/Transfer/train_img/"
-files_location = "E:/CF_Calcs/BenchmarkSets/GFRC/Other_train_sets/yolo_copy_train_img/"
+files_location = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_train832/"
 files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid384/"
 files_location_valid_sm = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid384_subset/"
 weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
 save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
 save_name = "testing_save_"
-grid_w = int(576 / 32)
-grid_h = int(384 / 32)
+grid_w = int(1248 / 32)
+grid_h = int(832 / 32)
 n_box = 5
 out_len = 6
 input_vec = [grid_w, grid_h, n_box, out_len]
@@ -57,7 +57,7 @@ animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid_sm
                                            ])
                                        )
 
-animalloader = DataLoader(animal_dataset, batch_size=16, shuffle=True)
+animalloader = DataLoader(animal_dataset, batch_size=4, shuffle=True)
 animalloader_validsm = DataLoader(animal_dataset_valid_sm, batch_size=32, shuffle=False)
 
 layerlist = get_weights(weightspath)
@@ -87,10 +87,10 @@ for epoch in range(50):
         ypred = net(images)
 
         criterion = YoloLoss()
-        loss = criterion(ypred, bndbxs, ytrue, anchors_in, 0.3, scalez, cell_grid, tot_bat)
+        loss = criterion(ypred, bndbxs, ytrue, anchors_in, 0.5, scalez, cell_grid, tot_bat)
         loss.backward()
 
-        if (i + 1) % 4 == 0:
+        if (i + 1) % 16 == 0:
             # every 2 iterations of batches of size 32
             opt.step()
             opt.zero_grad()

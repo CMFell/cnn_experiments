@@ -363,13 +363,13 @@ type = 'valid'
 # List of boxes
 csv_name = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '_GFRC_bboxes.csv'
 # folder to save in
-out_folder = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '384_img/'
+out_folder = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '832_subset/'
 # output list file
 out_file = "gfrc_" + type + ".txt"
 # Set options
 resize = True
 if type == 'valid':
-    kb = True
+    kb = False
     aug = False
     vert = False
     prob_blank = 1.0
@@ -380,9 +380,9 @@ else:
     prob_blank = 0.05
 # Set sizes
 input_shape = [4912, 7360]
-size_out = [192, 288]
+size_out = [832, 1248]
 pct_overlap = 1.0
-resize_mult = 2
+resize_mult = 1
 
 
 # Full path csv

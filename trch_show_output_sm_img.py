@@ -112,49 +112,35 @@ def basic_nms(xmins, xmaxs, ymins, ymaxs, confz, thresh):
     return xmins_out, xmaxs_out, ymins_out, ymaxs_out
 
 
-file_location = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/boxes_out34_full.csv"
-image_location = "C:/Users/christina/OneDrive - University of St Andrews/PhD/valid_images/"
+file_location = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/boxes_out10.csv"
+image_location = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid384_subset/"
 
 boxes_found = pd.read_csv(file_location)
 
 filenamez_in = boxes_found.file
-filenamez = filenamez_in.apply(split_fn)
-patchnoz = filenamez_in.apply(patch_no)
+all_filez = np.unique(filenamez_in)
 
 # convert box sizes to pixels
-xc_pix = np.array(boxes_found.xc * 288, dtype=np.int)
-yc_pix = np.array(boxes_found.yc * 192, dtype=np.int)
-wid_pix = np.array(boxes_found.wid * 288, dtype=np.int)
-hei_pix = np.array(boxes_found.hei * 192, dtype=np.int)
-print(xc_pix[0], yc_pix[0], wid_pix[0], hei_pix[0])
+xc_pix = np.array(boxes_found.xc * 576, dtype=np.int)
+yc_pix = np.array(boxes_found.yc * 384, dtype=np.int)
+wid_pix = np.array(boxes_found.wid * 576, dtype=np.int)
+hei_pix = np.array(boxes_found.hei * 384, dtype=np.int)
 
-patchx = np.array(np.floor(np.divide(patchnoz, 26)), dtype=np.int)
-patchy = patchnoz % 26
+xmin_img = np.array(xc_pix - wid_pix / 2, dtype=np.int)
+xmax_img = np.array(xc_pix + wid_pix / 2, dtype=np.int)
+ymin_img = np.array(yc_pix - hei_pix / 2, dtype=np.int)
+ymax_img = np.array(yc_pix + hei_pix / 2, dtype=np.int)
 
-patchtlx = patchx * 288
-patchtlx = np.where(patchtlx==7200, 7072, patchtlx)
-patchtly = patchy * 192
-patchtly = np.where(patchtly==4800, 4720, patchtly)
-print(patchnoz[0], patchy[0], patchx[0], patchtlx[0], patchtly[0])
+all_filez = np.unique(filenamez_in)
 
-xc_img = patchtlx + xc_pix
-yc_img = patchtly + yc_pix
+image_output_loc = "C:/Users/kryzi/OneDrive - University of St Andrews/output_image_test/"
 
-xmin_img = np.array(xc_img - wid_pix / 2, dtype=np.int)
-xmax_img = np.array(xc_img + wid_pix / 2, dtype=np.int)
-ymin_img = np.array(yc_img - hei_pix / 2, dtype=np.int)
-ymax_img = np.array(yc_img + hei_pix / 2, dtype=np.int)
-
-print(xc_img[0], yc_img[0], xmin_img[0], xmax_img[0], ymin_img[0], ymax_img[0])
-
-all_filez = np.unique(filenamez)
-
-image_output_loc = "C:/Users/christina/OneDrive - University of St Andrews/output_image_test/"
-
-for fl in range(len(all_filez)):
-    file_mask = filenamez == all_filez[fl]
-    file_path = image_location + all_filez[fl]
+# for fl in range(len(all_filez)):
+for fl in range(50):
+    file_mask = filenamez_in == all_filez[fl]
+    file_path = all_filez[fl]
     print(file_path)
+    print(boxes_found[file_mask])
     img_in = cv2.imread(file_path)
     xmin_file = xmin_img[file_mask]
     xmax_file = xmax_img[file_mask]
@@ -164,10 +150,8 @@ for fl in range(len(all_filez)):
     xmin_file, xmax_file, ymin_file, ymax_file = basic_nms(xmin_file, xmax_file, ymin_file, ymax_file, conf_file, 0.1)
     for bx in range(len(xmin_file)):
         cv2.rectangle(img_in, (xmin_file[bx], ymin_file[bx]), (xmax_file[bx], ymax_file[bx]), (0, 255, 0), 3)
-    image_out_path = image_output_loc + all_filez[fl][:-4] + "_annot.jpg"
-    cv2.imwrite(image_out_path, img_in)
-    print(image_out_path)
-    #if fl==10:
-    #    break
+    cv2.imshow('image', img_in)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 

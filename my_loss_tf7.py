@@ -192,9 +192,9 @@ def loss_gfrc_yolo(gt1, gt2, y_pred, bat_no, dict_in, biasdict, wtdict):
     predxy_wi, predwh_wi = adjust_pred_wi(predxy, predwh, cellgrid, boxsx, boxsy, anchors, nanchors)
     truexy, truewh, true_mins, true_maxes, true_areas, truewh_wi = adjust_gt(gt1, cellgrid, boxsx, boxsy, anchors, nanchors)
     iouscore, unar1 = ious_centre_cell(predwh_wi, predxy_wi, true_mins, true_maxes, true_areas)
-    noones, unar2, ia2 = create_masks(gt2, predxy_wi, predwh_wi, thresh)
+    #noones, unar2, ia2 = create_masks(gt2, predxy_wi, predwh_wi, thresh)
     ones = gt1[..., 4]
-    #noones = tf.subtract(1., ones)
+    noones = tf.subtract(1., ones)
 
     maskshape = tf.shape(predxy)
     warmxy, warmwh, warm_scale, warmno, warmiou, warmwh_wi = warm_up_adjust_simp(maskshape, boxsy, boxsx, anchors, nanchors)
