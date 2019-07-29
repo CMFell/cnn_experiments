@@ -361,15 +361,15 @@ basedir = 'E:/'
 # type of input
 type = 'valid'
 # List of boxes
-csv_name = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '_GFRC_bboxes.csv'
+csv_name = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '_GFRC_bboxes_multi.csv'
 # folder to save in
-out_folder = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '832_subset/'
+out_folder = 'CF_Calcs/BenchmarkSets/GFRC/yolo_' + type + '1248_multi/'
 # output list file
 out_file = "gfrc_" + type + ".txt"
 # Set options
 resize = True
 if type == 'valid':
-    kb = False
+    kb = True
     aug = False
     vert = False
     prob_blank = 1.0
@@ -380,7 +380,7 @@ else:
     prob_blank = 0.05
 # Set sizes
 input_shape = [4912, 7360]
-size_out = [832, 1248]
+size_out = [1248, 1856]
 pct_overlap = 1.0
 resize_mult = 1
 
@@ -417,4 +417,4 @@ if vert:
     for ff in range(filez_in.shape[0]):
         create_tiled_data(filez_in, ff, gfrcwindz_vert, dict4tiling, resize=resize, aug=aug, keep_blanks=kb, vert=vert, pblank=0.0)
 
-create_list_file(outpath, out_file)
+# create_list_file(outpath, out_file)

@@ -92,7 +92,7 @@ class YoloLoss(torch.nn.Module):
             iouscoresall = torch.where(bndbxsmask, iouscoresall, zerosreplace3)
             bestious = torch.max(iouscoresall, dim=4)
             bestious = bestious.values
-            print("best iou", round(torch.max(bestious).item(), 2))
+            # print("best iou", round(torch.max(bestious).item(), 2))
 
             # create masks ones and no ones
             noones = torch.lt(bestious, noobjthresh)
@@ -183,10 +183,10 @@ class YoloLoss(torch.nn.Module):
         xy_pred, wh_pred, cf_pred, cl_pred = split_preds(y_pred)
         # mask = torch.ge(cf_pred, 0.5).type(torch.FloatTensor)
         # mask = mask.unsqueeze(4).to(device)
-        print("xy", round(torch.max(xy_pred).item(), 2), round(torch.min(xy_pred).item(), 2),
-              "wh", round(torch.max(wh_pred).item(), 2), round(torch.min(wh_pred).item(), 2),
-              "cf", round(torch.max(cf_pred).item(), 2), round(torch.min(cf_pred).item(), 2),
-              "cl", round(torch.max(cl_pred).item(), 2), round(torch.min(cl_pred).item(), 2))
+        # print("xy", round(torch.max(xy_pred).item(), 2), round(torch.min(xy_pred).item(), 2),
+        #       "wh", round(torch.max(wh_pred).item(), 2), round(torch.min(wh_pred).item(), 2),
+        #       "cf", round(torch.max(cf_pred).item(), 2), round(torch.min(cf_pred).item(), 2),
+        #       "cl", round(torch.max(cl_pred).item(), 2), round(torch.min(cl_pred).item(), 2))
 
         # Get predictions on whole image
         pred_xy_wi = torch.div(torch.add(xy_pred, cell_grid), grid_trch)
@@ -198,21 +198,21 @@ class YoloLoss(torch.nn.Module):
 
         # get true values and whole image values from true matrix
         true_xy, true_wh, true_xy_wi_mat, true_wh_wi_mat = process_ytrue_mat(y_true, cell_grid, grid_trch, anchors1, ep)
-        print("true_xy", round(torch.max(true_xy).item(), 2), round(torch.min(true_xy).item(), 2),
-              "true_wh", round(torch.max(true_wh).item(), 2), round(torch.min(true_wh).item(), 2),
-              "true_xy_wi_mat", round(torch.max(true_xy_wi_mat).item(), 2),
-              "true_wh_wi_mat", round(torch.max(true_wh_wi_mat).item(), 2))
+        # print("true_xy", round(torch.max(true_xy).item(), 2), round(torch.min(true_xy).item(), 2),
+        #       "true_wh", round(torch.max(true_wh).item(), 2), round(torch.min(true_wh).item(), 2),
+        #       "true_xy_wi_mat", round(torch.max(true_xy_wi_mat).item(), 2),
+        #       "true_wh_wi_mat", round(torch.max(true_wh_wi_mat).item(), 2))
 
         iou_scores = get_iou_mat(true_xy_wi_mat, true_wh_wi_mat, pred_xy_wi, pred_wh_wi)
-        print("iou score", round(torch.max(iou_scores).item(), 2))
+        # print("iou score", round(torch.max(iou_scores).item(), 2))
 
         ones = y_true[..., 4]
         # warm_ones = torch.zeros(ones.size()).to(device)
         warm_ones = torch.mul(ones, 0.01)
         #ones = warm_select(ep, warm_ones, ones)
 
-        print("xywi", round(torch.max(pred_xy_wi).item(), 2), round(torch.min(pred_xy_wi).item(), 2),
-              "whwi", round(torch.max(pred_wh_wi).item(), 2), round(torch.min(pred_wh_wi).item(), 2))
+        # print("xywi", round(torch.max(pred_xy_wi).item(), 2), round(torch.min(pred_xy_wi).item(), 2),
+        #       "whwi", round(torch.max(pred_wh_wi).item(), 2), round(torch.min(pred_wh_wi).item(), 2))
 
         obj_scale = scalez[0]
         no_obj_scale = scalez[1]

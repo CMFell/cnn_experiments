@@ -1,9 +1,9 @@
 import torch
-from trch_yolonet import YoloNet
+from trch_yolonet import YoloNet, YoloNetSimp
 from trch_import import AnimalBoundBoxDataset, ToTensor, MakeMat
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-from trch_accuracy import accuracy
+from trch_accuracy import accuracy, calc_iou_centwh, accuracyiou
 from trch_weights import get_weights
 import numpy as np
 import pandas as pd
@@ -24,8 +24,9 @@ def simple_nms(boxes_in, thresh):
     flns = boxes_in.file
     cnfs = boxes_in.conf
     clzz = boxes_in['class']
+    tpz = boxes_in['tp']
 
-    boxes_ot = pd.DataFrame(columns=["xc", "yc", "wid", "hei", "file", "conf", "class"])
+    boxes_ot = pd.DataFrame(columns=["xc", "yc", "wid", "hei", "file", "conf", "class", "tp"])
 
     xmins = np.array(xmins.tolist())
     xmaxs = np.array(xmaxs.tolist())
@@ -34,6 +35,7 @@ def simple_nms(boxes_in, thresh):
     flns = np.array(flns.tolist())
     cnfs = np.array(cnfs.tolist())
     clzz = np.array(clzz.tolist())
+    tpz = np.array(tpz.tolist())
 
     while len(xmins) > 0:
 
@@ -65,7 +67,7 @@ def simple_nms(boxes_in, thresh):
         mask_bxs = np.greater(ious, thresh)
 
         if np.sum(mask_bxs) > 0:
-            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class"])
+            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class", "tp"])
             xmns = xmns[mask_bxs]
             xmxs = xmxs[mask_bxs]
             ymns = ymns[mask_bxs]
@@ -83,6 +85,7 @@ def simple_nms(boxes_in, thresh):
             box_ot.file.iloc[0] = flns[0]
             box_ot.conf.iloc[0] = cnfs[0]
             box_ot['class'].iloc[0] = clzz[0]
+            box_ot['tp'].iloc[0] = tpz[0]
 
             mask_out = np.repeat(False, len(xmins))
             mask_out[0] = True
@@ -96,8 +99,9 @@ def simple_nms(boxes_in, thresh):
             flns = flns[mask_out]
             cnfs = cnfs[mask_out]
             clzz = clzz[mask_out]
+            tpz = tpz[mask_out]
         else:
-            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class"])
+            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class", "tp"])
             box_ot.xc.iloc[0] = (xmn + xmx) / 2
             box_ot.yc.iloc[0] = (ymn + ymx) / 2
             box_ot.wid.iloc[0] = xmx - xmn
@@ -105,6 +109,7 @@ def simple_nms(boxes_in, thresh):
             box_ot.file.iloc[0] = flns[0]
             box_ot.conf.iloc[0] = cnfs[0]
             box_ot['class'].iloc[0] = clzz[0]
+            box_ot['tp'].iloc[0] = tpz[0]
 
             mask_out = np.repeat(False, len(xmins))
             mask_out[0] = True
@@ -116,6 +121,7 @@ def simple_nms(boxes_in, thresh):
             flns = flns[mask_out]
             cnfs = cnfs[mask_out]
             clzz = clzz[mask_out]
+            tpz = tpz[mask_out]
         boxes_ot = pd.concat((boxes_ot, box_ot), axis=0)
 
     return boxes_ot
@@ -183,48 +189,56 @@ def yolo_output_to_box(y_pred, namez, dict_in):
     size_cnn = np.divide(size_cnn, size3)
     class_cnn = expit(y_pred[:, :, :, :, 5:])
 
-    boxes_out = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
+    boxes_out = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class', 'tp'])
     scores_out = []
     classes_out = []
 
     for img in range(n_bat):
         filen = namez[img]
-        box_img = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
+        truth_file = filen[:-4] + '.txt'
+        truthz = pd.read_csv(truth_file, header=None, sep=' ', names=['class', 'xc', 'yc', 'wid', 'hei'])
+        box_img = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class', 'tp'])
         for yc in range(boxsy):
             for xc in range(boxsx):
                 for ab in range(nanchors):
-                    #print(confs_cnn[img, yc, xc, ab])
                     if confs_cnn[img, yc, xc, ab] > thresh:
                         scores_out.append(confs_cnn[img, yc, xc, ab])
                         class_out = np.argmax(class_cnn[img, yc, xc, ab, :])
                         classes_out.append(class_out)
                         box_img.loc[len(box_img)] = [cent_cnn[img, yc, xc, ab, 0], cent_cnn[img, yc, xc, ab, 1],
                                                          size_cnn[img, yc, xc, ab, 0], size_cnn[img, yc, xc, ab, 1],
-                                                         filen, confs_cnn[img, yc, xc, ab], class_out]
+                                                         filen, confs_cnn[img, yc, xc, ab], class_out, 0]
+                        # calc iou with truths
+                        for tr in range(truthz.shape[0]):
+                            iou = calc_iou_centwh(box_img.loc[len(box_img) - 1], truthz.iloc[tr])
+                            if iou > 0.3:
+                                box_img['tp'].loc[len(box_img) - 1] = 1
+
+                        # tp = torch.sum(poz & truez)
         if box_img.shape[0] > 0:
             box_img_ot = simple_nms(box_img, 0.1)
             boxes_out = pd.concat((boxes_out, box_img_ot), axis=0)
-
 
     output = [boxes_out, scores_out, classes_out]
 
     return output
 
 
-files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid832/"
+files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid1248/"
 weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
 
-save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
+save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/size1248/"
 save_name = "testing_save_"
-save_path = save_dir + save_name + str(34) + ".pt"
+save_path = save_dir + save_name + str(44) + ".pt"
 
-grid_w = int(1248 / 32)
-grid_h = int(832 / 32)
+grid_w = int(1856 / 32)
+grid_h = int(1248 / 32)
 n_box = 5
 out_len = 6
 input_vec = [grid_w, grid_h, n_box, out_len]
-anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-              [5.319540, 6.116692]]
+# anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+#            [0.437500, 0.328125]]
+anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889], [5.319540, 6.116692]]
 
 animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid,
                                        inputvec=input_vec,
@@ -235,7 +249,7 @@ animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid,
                                            ])
                                        )
 
-animalloader_valid = DataLoader(animal_dataset_valid_sm, batch_size=2, shuffle=False)
+animalloader_valid = DataLoader(animal_dataset_valid_sm, batch_size=1, shuffle=False)
 
 layerlist = get_weights(weightspath)
 
@@ -250,7 +264,9 @@ fnfn = 0
 i = 0
 
 # define values for calculating loss
-input_shape = (384, 576, 3)
+input_shape = (1248, 1856, 3)
+# anchors_in = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+#               [0.437500, 0.328125]]
 anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
               [5.319540, 6.116692]]
 anchors_in = np.array(anchors_in)
@@ -264,14 +280,16 @@ classes_in = 1
 lambda_c = 5.0
 lambda_no = 0.5
 batch_size = 8
-threshold = 0.5
+threshold = 0.3
 dict_deets = {'boxs_x': boxs_x, 'boxs_y': boxs_y, 'img_x_pix': img_x_pix, 'img_y_pix': img_y_pix,
               'anchors': anchors_in, 'n_classes': classes_in, 'lambda_coord': lambda_c, 'lambda_noobj': lambda_no,
               'base_dir': files_location_valid, 'batch_size': batch_size, 'threshold': threshold}
-boxes_out_all = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
+boxes_out_all = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class', 'tp'])
 scores_out_all = []
 classes_out_all = []
 
+tottrue = 0
+tottps = 0
 
 for data in animalloader_valid:
     print(i)
@@ -280,23 +298,34 @@ for data in animalloader_valid:
     images = data["image"]
     images = images.to(device)
     bndbxs = data["bndbxs"]
-    bndbxs = bndbxs.to(device)
+    # bndbxs = bndbxs.to(device)
     y_true = data["y_true"]
     y_true = y_true.to(device)
     filen = data["name"]
     # print("epoch", epoch, "batch", i)
     y_pred = net(images)
-    accz = accuracy(y_pred, y_true, 0.3)
-    tptp += accz[0].data.item()
-    fpfp += accz[1].data.item()
-    fnfn += accz[2].data.item()
+
+    pboxes, tottr, tottp = accuracyiou(y_pred, bndbxs, filen, anchors_in, 0.3, 0.1)
+    tottrue += tottr
+    tottps += tottp
+    print(tottrue, tottps)
+    # accz = accuracy(y_pred, y_true, 0.3)
+    # tptp += accz[0].data.item()
+    # fpfp += accz[1].data.item()
+    # fnfn += accz[2].data.item()
+    # print(pboxes.iou)
+    # print(pboxes.tp)
+    tptp += np.sum(pboxes.tp)
+    fpfp += pboxes.shape[0] - np.sum(pboxes.tp)
     y_pred_np = y_pred.data.cpu().numpy()
     output_img = yolo_output_to_box(y_pred_np, filen, dict_deets)
     boxes_out_all = boxes_out_all.append(output_img[0], ignore_index=True)
+    #print("boa", boxes_out_all.shape[0])
     i += 1
 
-print("epoch", 34, "TP", tptp, "FP", fpfp, "FN", fnfn, "Recall", tptp / 399, "FPPI", fpfp / 131)
-output_path = save_dir + "boxes_out" + str(34) + "_full.csv"
+
+print("epoch", 44, "TP", tottps, "FP", fpfp, "FN", (tottrue - tottps), "Recall", tottps / tottrue, "FPPI", fpfp / 131)
+output_path = save_dir + "boxes_out" + str(44) + "_full.csv"
 boxes_out_all.to_csv(output_path)
 
 #print(boxes_out_all.shape[0])

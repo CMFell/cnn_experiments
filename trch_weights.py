@@ -11,7 +11,7 @@ def get_weights(wt_path):
 
     run_tot = 0
     weight_read = np.fromfile(wt_path, dtype='float32')
-    print("new weight", len(weight_read))
+    #print("new weight", len(weight_read))
     weights_header = weight_read[:4]
     run_tot += 4
 
@@ -57,7 +57,7 @@ def get_weights(wt_path):
     #layerlist.append(lay_out)
     layerlist[conv_name] = kernel
 
-    print("remaining_weights = ", len(weight_read) - run_tot)
+    #print("remaining_weights = ", len(weight_read) - run_tot)
 
     return(layerlist)
 
