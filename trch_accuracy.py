@@ -4,6 +4,11 @@ import pandas as pd
 from scipy.special import expit
 import math
 
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum()
+
 def accuracy(y_pred, y_true, thresh):
     outputs = y_pred.unsqueeze(4)
     outputs = torch.chunk(outputs, 5, dim=3)
@@ -45,8 +50,9 @@ def pred_to_box(pred_in, filenmz, ankbox, thresh):
                         wid_out = np.exp(pred_in[bt, by, bx, ak, 2].tolist()) * ankbox[ak, 0] / boxsx
                         hei_out = np.exp(pred_in[bt, by, bx, ak, 3].tolist()) * ankbox[ak, 1] / boxsy
                         cnf_out = expit(pred_in[bt, by, bx, ak, 4].tolist())
-                        clz_out = expit(pred_in[bt, by, bx, ak, 5:].tolist())
-                        vec_out = [xc_out, yc_out, wid_out, hei_out, cnf_out, clz_out]
+                        clz_out = softmax(pred_in[bt, by, bx, ak, 5:].tolist())
+                        vec_out = [xc_out, yc_out, wid_out, hei_out, cnf_out]
+                        vec_out.extend(clz_out.tolist())
                         vec_out = np.reshape(vec_out, (1, vecsize))
                         vec_out = pd.DataFrame(vec_out, columns=colnamez[1:])
                         vec_out['filen'] = filenmz[bt]
@@ -114,15 +120,21 @@ def accuracyiou(ypred, bndbxs, filenmz, ankbox, confthr, iouthr):
     iouz = np.array(iouz)
     tot_true = 0
     for img in range(bndbxs.shape[0]):
+        # find maximum number of boundboxes for that image
+        bbxz_img = bndbxs_out[bndbxs_out.filen == filenmz[img]]
+        bbxz_area = bbxz_img.xc * bbxz_img.yc
+        tot_bbx = np.sum(bbxz_area > 0)
+        # print("total truths", tot_bbx)
+        tot_true += tot_bbx
         if predbox.shape[0] > 0:
             predz_mask = predbox.filen == filenmz[img]
             predz_mask = np.array(predz_mask)
             # find maximum number of boundboxes for that image
-            bbxz_img = bndbxs_out[bndbxs_out.filen == filenmz[img]]
-            bbxz_area = bbxz_img.xc * bbxz_img.yc
-            tot_bbx = np.sum(bbxz_area > 0)
+            # bbxz_img = bndbxs_out[bndbxs_out.filen == filenmz[img]]
+            # bbxz_area = bbxz_img.xc * bbxz_img.yc
+            # tot_bbx = np.sum(bbxz_area > 0)
             # print("total truths", tot_bbx)
-            tot_true += tot_bbx
+            # tot_true += tot_bbx
             for bb in range(tot_bbx):
                 bb_mask = bbxz == bb
                 fin_mask = np.logical_and(predz_mask, bb_mask)

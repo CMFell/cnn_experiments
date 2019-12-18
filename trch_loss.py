@@ -28,6 +28,16 @@ class YoloLoss(torch.nn.Module):
             clpred = clpred.squeeze()
             return xypred, whpred, cfpred, clpred
 
+        def split_preds_multi(outputz):
+            # split to get individual outputs
+            xypred = torch.sigmoid(outputz[..., 0:2])
+            whpred = outputz[..., 2:4]
+            cfpred = torch.sigmoid(outputz[..., 4])
+            # clpred = torch.sigmoid(outputz[..., 5:])
+            clpred = torch.nn.functional.softmax(outputz[..., 5:], dim=4)
+            # clpred = clpred.squeeze()
+            return xypred, whpred, cfpred, clpred
+
         def create_bndbx_masks(sampbndbxs):
             # get mask of which areas are zero
             wh_gt = sampbndbxs[:, :, 2]
@@ -180,7 +190,7 @@ class YoloLoss(torch.nn.Module):
         bndbxs_mask, bndbxs_mask2, bndbxs_mask4 = create_bndbx_masks(samp_bndbxs)
 
         # Process Predictions
-        xy_pred, wh_pred, cf_pred, cl_pred = split_preds(y_pred)
+        xy_pred, wh_pred, cf_pred, cl_pred = split_preds_multi(y_pred)
         # mask = torch.ge(cf_pred, 0.5).type(torch.FloatTensor)
         # mask = mask.unsqueeze(4).to(device)
         # print("xy", round(torch.max(xy_pred).item(), 2), round(torch.min(xy_pred).item(), 2),
@@ -239,9 +249,13 @@ class YoloLoss(torch.nn.Module):
         loss_noconf = torch.mul(loss_noconf, no_obj_scale)
         loss_noconf = torch.sum(loss_noconf)
 
+        ones = ones.unsqueeze(4)
+
         ones_replace = torch.ones(cl_pred.size())
         ones_replace = ones_replace.to(device)
-        loss_class = ones_replace - cl_pred
+        class_true = y_true[..., 5:]
+        class_true = class_true.to(device)
+        loss_class = class_true - cl_pred
         loss_class = torch.pow(loss_class, 2)
         loss_class = torch.mul(loss_class, ones)
         loss_class = torch.mul(loss_class, class_scale)
@@ -249,7 +263,6 @@ class YoloLoss(torch.nn.Module):
 
         #warm_ones = warm_ones.fill_(0.01)
         #ones = warm_select(ep, warm_ones, ones)
-        ones = ones.unsqueeze(4)
 
         loss_xy = torch.pow((true_xy - xy_pred), 2)
         loss_xy = torch.mul(loss_xy, ones)
@@ -262,7 +275,7 @@ class YoloLoss(torch.nn.Module):
         loss_wh = torch.sum(loss_wh)
 
         # outz = [loss_conf, loss_noconf, loss_class, loss_wh, loss_xy]
-        loss = loss_conf + loss_noconf + loss_wh + loss_xy # + loss_class
+        loss = loss_conf + loss_noconf + loss_wh + loss_xy + loss_class
         print("total loss", round(loss.item(), 2),
               "conf", round(loss_conf.item(), 2),
               "noconf", round(loss_noconf.item(), 2),

@@ -6,7 +6,7 @@ from trch_weights import get_weights
 
 class YoloNet(nn.Module):
 
-    def __init__(self, layerz):
+    def __init__(self, layerz, finsize):
         super(YoloNet, self).__init__()
         # kernel
         def processweights(weightz, flin, chnl, size):
@@ -125,7 +125,7 @@ class YoloNet(nn.Module):
         self.conv21_bn = nn.BatchNorm2d(1024)
         # self.conv21_bn.weight.data = processbias(layerz["norm_21"]["gamma"])
         # self.conv21_bn.bias.data = processbias(layerz["norm_21"]["beta"])
-        self.conv22 = nn.Conv2d(1024, 30, 1, 1, 0)
+        self.conv22 = nn.Conv2d(1024, finsize, 1, 1, 0)
         # self.conv22.weight.data = processweights(layerz["conv_22"], 30, 1024, 1)
 
 

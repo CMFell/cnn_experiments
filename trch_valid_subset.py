@@ -210,12 +210,12 @@ def yolo_output_to_box(y_pred, namez, dict_in):
 
     return output
 
-for xx in range(99):
+for xx in range(2, 50):
 
-    files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid1248_subset/"
+    files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid1248_multi_subset/"
     weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
 
-    save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/size1248/"
+    save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
     save_name = "testing_save_"
     save_path = save_dir + save_name + str(xx) + ".pt"
 
@@ -225,7 +225,8 @@ for xx in range(99):
     # grid_w = int(1856 / 16)
     # grid_h = int(1248 / 16)
     n_box = 5
-    out_len = 6
+    out_len = 11
+    fin_size = n_box * out_len
     input_vec = [grid_w, grid_h, n_box, out_len]
     anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
                   [5.319540, 6.116692]]
@@ -246,7 +247,7 @@ for xx in range(99):
 
     layerlist = get_weights(weightspath)
 
-    net = YoloNet(layerlist)
+    net = YoloNet(layerlist, fin_size)
     net = net.to(device)
     net.load_state_dict(torch.load(save_path))
     net.eval()

@@ -224,17 +224,18 @@ def yolo_output_to_box(y_pred, namez, dict_in):
     return output
 
 
-files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid1248/"
+files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid1248_multi/"
 weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
 
-save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/size1248/"
+save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
 save_name = "testing_save_"
-save_path = save_dir + save_name + str(44) + ".pt"
+save_path = save_dir + save_name + str(46) + ".pt"
 
 grid_w = int(1856 / 32)
 grid_h = int(1248 / 32)
 n_box = 5
-out_len = 6
+out_len = 11
+fin_size = n_box * out_len
 input_vec = [grid_w, grid_h, n_box, out_len]
 # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
 #            [0.437500, 0.328125]]
@@ -253,7 +254,7 @@ animalloader_valid = DataLoader(animal_dataset_valid_sm, batch_size=1, shuffle=F
 
 layerlist = get_weights(weightspath)
 
-net = YoloNet(layerlist)
+net = YoloNet(layerlist, fin_size)
 net = net.to(device)
 net.load_state_dict(torch.load(save_path))
 net.eval()
@@ -305,7 +306,7 @@ for data in animalloader_valid:
     # print("epoch", epoch, "batch", i)
     y_pred = net(images)
 
-    pboxes, tottr, tottp = accuracyiou(y_pred, bndbxs, filen, anchors_in, 0.3, 0.1)
+    pboxes, tottr, tottp = accuracyiou(y_pred, bndbxs, filen, anchors_in, 0.5, 0.1)
     tottrue += tottr
     tottps += tottp
     print(tottrue, tottps)
@@ -324,8 +325,8 @@ for data in animalloader_valid:
     i += 1
 
 
-print("epoch", 44, "TP", tottps, "FP", fpfp, "FN", (tottrue - tottps), "Recall", tottps / tottrue, "FPPI", fpfp / 131)
-output_path = save_dir + "boxes_out" + str(44) + "_full.csv"
+print("epoch", 46, "TP", tottps, "FP", fpfp, "FN", (tottrue - tottps), "Recall", tottps / tottrue, "FPPI", fpfp / 131)
+output_path = save_dir + "boxes_out" + str(46) + "_full.csv"
 boxes_out_all.to_csv(output_path)
 
 #print(boxes_out_all.shape[0])

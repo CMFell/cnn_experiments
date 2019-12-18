@@ -377,7 +377,7 @@ else:
     kb = True
     aug = True
     vert = True
-    prob_blank = 0.05
+    prob_blank = 0.1
 # Set sizes
 input_shape = [4912, 7360]
 size_out = [1248, 1856]
