@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 class AnimalBoundBoxDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, root_dir, inputvec, anchors, transform=None):
+    def __init__(self, root_dir, inputvec, anchors, maxann, transform=None):
         """
         Args:
             root_dir (string): Directory with all the images.
@@ -24,6 +24,7 @@ class AnimalBoundBoxDataset(Dataset):
         self.root_dir = root_dir
         self.transform = transform
         self.files_list = os.listdir(self.root_dir)
+        self.maxann = maxann
         for ff in range(len(self.files_list)):
             self.files_list[ff] = self.files_list[ff][:-4]
         self.files_list = np.unique(self.files_list)
@@ -38,7 +39,7 @@ class AnimalBoundBoxDataset(Dataset):
         bndbxs_name = self.root_dir + self.files_list[idx] + ".txt"
         bndbxs = pd.read_csv(bndbxs_name, sep=' ', header=None, names=['class', 'xc', 'yc', 'wid', 'hei'])
         bndbxs = bndbxs.astype('float')
-        bndbx_pad = pd.DataFrame(np.zeros((14-bndbxs.shape[0], 5)), columns=['class', 'xc', 'yc', 'wid', 'hei'])
+        bndbx_pad = pd.DataFrame(np.zeros((self.maxann-bndbxs.shape[0], 5)), columns=['class', 'xc', 'yc', 'wid', 'hei'])
         bndbxs = pd.concat([bndbxs, bndbx_pad])
 
         sample = {'image': image, 'bndbxs': bndbxs, 'name':img_name}

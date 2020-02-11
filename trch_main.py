@@ -1,5 +1,5 @@
 from trch_import import AnimalBoundBoxDataset, ToTensor, MakeMat
-from trch_yolonet import YoloNet, YoloNetSimp
+from trch_yolonet import YoloNet, YoloNetSimp, YoloNetOrig
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from trch_loss import YoloLoss
@@ -13,19 +13,44 @@ print(torch.cuda.is_available())
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # files_location = "C:/Users/kryzi/OneDrive - University of St Andrews/Transfer/train_img/"
-files_location = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_train1248_multi/"
+# files_location = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_train1248_multi/"
 #files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid832/"
 #files_location_valid_sm = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid384_subset/"
-weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
-save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
+#weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
+#weightspath = "/data/old_home_dir/ChrissyF/GFRC/yolo-gfrc_6600.weights"
+weightspath = "/data/old_home_dir/ChrissyF/GFRC/yolov2.weights"
 save_name = "testing_save_"
-grid_w = int(1856 / 32)
-grid_h = int(1248 / 32)
+# GFRC values
+# grid_w = int(1856 / 32)
+# grid_h = int(1248 / 32)
+# n_img = 6414
+# files_location = "/data/old_home_dir/ChrissyF/GFRC/yolo_train1248_multi/"
+# save_dir = "/home/cmf21/pytorch_save/GFRC/"
+# out_len = 11
+# max_annotations = 14
+# INRIA values
+grid_w = int(640 / 32)
+grid_h = int(480 / 32)
+n_img = 1832
+files_location = "/data/old_home_dir/ChrissyF/INRIA/yolo_train/"
+files_location_valid = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid/"
+# files_location_valid = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid_sm/"
+save_dir = "/home/cmf21/pytorch_save/INRIA/"
+out_len = 6
+max_annotations = 8
+# VEDAI values
+# grid_w = int(1024 / 32)
+# grid_h = int(1024 / 32)
+# n_img = 726
+# files_location = "/data/old_home_dir/ChrissyF/VEDAI/yolo_train/"
+# save_dir = "/home/cmf21/pytorch_save/VEDAI/"
+# out_len = 14
+# max_annotations = 19
 # Simplified net
 # grid_w = int(1856 / 16)
 # grid_h = int(1248 / 16)
 n_box = 5
-out_len = 11
+bat_sz = 2
 fin_size = n_box * out_len
 input_vec = [grid_w, grid_h, n_box, out_len]
 anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889], [5.319540, 6.116692]]
@@ -46,11 +71,22 @@ cell_grid = cell_grid.to(device)
 animal_dataset = AnimalBoundBoxDataset(root_dir=files_location,
                                        inputvec=input_vec,
                                        anchors=anchors,
+                                       maxann=max_annotations,
                                        transform=transforms.Compose([
                                                MakeMat(input_vec, anchors),
                                                ToTensor()
                                            ])
                                        )
+# animal_dataset_valid = AnimalBoundBoxDataset(root_dir=files_location_valid,
+#                                             inputvec=input_vec,
+#                                             anchors=anchors,
+#                                              maxann=max_annotations,
+#                                              transform=transforms.Compose([
+#                                                 MakeMat(input_vec, anchors),
+#                                                 ToTensor()
+#                                             ])
+#                                         )
+
 #print(animal_dataset[0]['bndbxs'])
 #print(animal_dataset[0]['y_true'])
 
@@ -65,12 +101,12 @@ animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid_sm
                                        )
 """
 
-animalloader = DataLoader(animal_dataset, batch_size=2, shuffle=True)
-#animalloader_validsm = DataLoader(animal_dataset_valid_sm, batch_size=32, shuffle=False)
+animalloader = DataLoader(animal_dataset, batch_size=bat_sz, shuffle=True)
+# animalloader_valid = DataLoader(animal_dataset_valid, batch_size=bat_sz, shuffle=False)
 
 layerlist = get_weights(weightspath)
 
-net = YoloNet(layerlist, fin_size)
+net = YoloNetOrig(layerlist, fin_size)
 net = net.to(device)
 save_path = save_dir + save_name + str(49) + ".pt"
 # net.load_state_dict(torch.load(save_path))
@@ -85,7 +121,7 @@ for epoch in range(50):
     fpfp = 0
     fnfn = 0
     for data in animalloader:
-        tot_bat = epoch * 6414 / 2  + i
+        tot_bat = epoch * n_img / bat_sz  + i
         print(tot_bat)
         images = data["image"]
         images = images.to(device)

@@ -333,6 +333,139 @@ class YoloNetSimp(nn.Module):
         x = x.transpose(2, 3)
         return x
 
+class YoloNetOrig(nn.Module):
+
+    def __init__(self, layerz, finsize):
+        super(YoloNetOrig, self).__init__()
+        # kernel
+        def processweights(weightz, flin, chnl, size):
+            conv_shape = (flin, chnl, size, size)
+            # conv_shape = (filters_in[lind], sizes[lind], sizes[lind], channels[lind])
+            weightz = np.reshape(weightz, conv_shape)
+            weightz = torch.from_numpy(weightz)
+            # weightz = weightz.transpose(0, 1)
+            # weightz = weightz.transpose(1, 2)
+            return weightz
+        def processbias(weightz):
+            biaz = torch.from_numpy(weightz)
+            return biaz
+        self.conv1 = nn.Conv2d(3, 32, 3, 1, 1)
+        self.conv1.weight.data = processweights(layerz["conv_1"], 32, 3, 3)
+        self.conv1_bn = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, 3, 1, 1)
+        self.conv2.weight.data = processweights(layerz["conv_2"], 64, 32, 3)
+        self.conv2_bn = nn.BatchNorm2d(64)
+
+        self.conv3 = nn.Conv2d(64, 128, 3, 1, 1)
+        self.conv3.weight.data = processweights(layerz["conv_3"], 128, 64, 3)
+        self.conv3_bn = nn.BatchNorm2d(128)
+        self.conv4 = nn.Conv2d(128, 64, 1, 1, 0)
+        self.conv4.weight.data = processweights(layerz["conv_4"], 64, 128, 1)
+        self.conv4_bn = nn.BatchNorm2d(64)
+        self.conv5 = nn.Conv2d(64, 128, 3, 1, 1)
+        self.conv5.weight.data = processweights(layerz["conv_5"], 128, 64, 3)
+        self.conv5_bn = nn.BatchNorm2d(128)
+
+        self.conv6 = nn.Conv2d(128, 256, 3, 1, 1)
+        self.conv6.weight.data = processweights(layerz["conv_6"], 256, 128, 3)
+        self.conv6_bn = nn.BatchNorm2d(256)
+        self.conv7 = nn.Conv2d(256, 128, 1, 1, 0)
+        self.conv7.weight.data = processweights(layerz["conv_7"], 128, 256, 1)
+        self.conv7_bn = nn.BatchNorm2d(128)
+        self.conv8 = nn.Conv2d(128, 256, 3, 1, 1)
+        self.conv8.weight.data = processweights(layerz["conv_8"], 256, 128, 3)
+        self.conv8_bn = nn.BatchNorm2d(256)
+
+        self.conv9 = nn.Conv2d(256, 512, 3, 1, 1)
+        self.conv9.weight.data = processweights(layerz["conv_9"], 512, 256, 3)
+        self.conv9_bn = nn.BatchNorm2d(512)
+        self.conv10 = nn.Conv2d(512, 256, 1, 1, 0)
+        self.conv10.weight.data = processweights(layerz["conv_10"], 256, 512, 1)
+        self.conv10_bn = nn.BatchNorm2d(256)
+        self.conv11 = nn.Conv2d(256, 512, 3, 1, 1)
+        self.conv11.weight.data = processweights(layerz["conv_11"], 512, 256, 3)
+        self.conv11_bn = nn.BatchNorm2d(512)
+        self.conv12 = nn.Conv2d(512, 256, 1, 1, 0)
+        self.conv12.weight.data = processweights(layerz["conv_12"], 256, 512, 1)
+        self.conv12_bn = nn.BatchNorm2d(256)
+        self.conv13 = nn.Conv2d(256, 512, 3, 1, 1)
+        self.conv13.weight.data = processweights(layerz["conv_13"], 512, 256, 3)
+        self.conv13_bn = nn.BatchNorm2d(512)
+
+        self.conv14 = nn.Conv2d(512, 1024, 3, 1, 1)
+        self.conv14.weight.data = processweights(layerz["conv_14"], 1024, 512, 3)
+        self.conv14_bn = nn.BatchNorm2d(1024)
+        self.conv15 = nn.Conv2d(1024, 512, 1, 1, 0)
+        self.conv15.weight.data = processweights(layerz["conv_15"], 512, 1024, 1)
+        self.conv15_bn = nn.BatchNorm2d(512)
+        self.conv16 = nn.Conv2d(512, 1024, 3, 1, 1)
+        self.conv16.weight.data = processweights(layerz["conv_16"], 1024, 512, 3)
+        self.conv16_bn = nn.BatchNorm2d(1024)
+        self.conv17 = nn.Conv2d(1024, 512, 1, 1, 0)
+        self.conv17.weight.data = processweights(layerz["conv_17"], 512, 1024, 1)
+        self.conv17_bn = nn.BatchNorm2d(512)
+        self.conv18 = nn.Conv2d(512, 1024, 3, 1, 1)
+        self.conv18.weight.data = processweights(layerz["conv_18"], 1024, 512, 3)
+        self.conv18_bn = nn.BatchNorm2d(1024)
+
+        self.conv19 = nn.Conv2d(1024, 1024, 3, 1, 1)
+        self.conv19.weight.data = processweights(layerz["conv_19"], 1024, 1024, 3)
+        self.conv19_bn = nn.BatchNorm2d(1024)
+        self.conv20 = nn.Conv2d(1024, 1024, 3, 1, 1)
+        self.conv20.weight.data = processweights(layerz["conv_20"], 1024, 1024, 3)
+        self.conv20_bn = nn.BatchNorm2d(1024)
+
+        self.conv21 = nn.Conv2d(512, 64, 1, 1)
+        self.conv21.weight.data = processweights(layerz["conv_21"], 64, 512, 1)
+        self.conv21_bn = nn.BatchNorm2d(64)
+
+        self.conv22 = nn.Conv2d(1280, 1024, 3, 1, 1)
+        self.conv22.weight.data = processweights(layerz["conv_22"], 1024, 1280, 3)
+        self.conv22_bn = nn.BatchNorm2d(1024)
+
+        self.conv23 = nn.Conv2d(1024, finsize, 1, 1, 0)
+
+
+    def forward(self, x):
+        # Max pooling over a (2, 2) window
+        x = self.conv1(x)
+        x = F.max_pool2d(F.leaky_relu(self.conv1_bn(x)), (2, 2))
+        x = F.max_pool2d(F.leaky_relu(self.conv2_bn(self.conv2(x))), (2, 2))
+        x = F.leaky_relu(self.conv3_bn(self.conv3(x)))
+        x = F.leaky_relu(self.conv4_bn(self.conv4(x)))
+        x = F.max_pool2d(F.leaky_relu(self.conv5_bn(self.conv5(x))), (2, 2))
+        x = F.leaky_relu(self.conv6_bn(self.conv6(x)))
+        x = F.leaky_relu(self.conv7_bn(self.conv7(x)))
+        x = F.max_pool2d(F.leaky_relu(self.conv8_bn(self.conv8(x))), (2, 2))
+        x = F.leaky_relu(self.conv9_bn(self.conv9(x)))
+        x = F.leaky_relu(self.conv10_bn(self.conv10(x)))
+        x = F.leaky_relu(self.conv11_bn(self.conv11(x)))
+        x = F.leaky_relu(self.conv12_bn(self.conv12(x)))
+        x = F.leaky_relu(self.conv13_bn(self.conv13(x)))
+        skip = x
+        x = F.max_pool2d(x, (2, 2))
+        x = F.leaky_relu(self.conv14_bn(self.conv14(x)))
+        x = F.leaky_relu(self.conv15_bn(self.conv15(x)))
+        x = F.leaky_relu(self.conv16_bn(self.conv16(x)))
+        x = F.leaky_relu(self.conv17_bn(self.conv17(x)))
+        x = F.leaky_relu(self.conv18_bn(self.conv18(x)))
+        
+        x = F.leaky_relu(self.conv19_bn(self.conv19(x)))
+        x = F.leaky_relu(self.conv20_bn(self.conv20(x)))
+        # outest = skip.size()
+        skip = F.leaky_relu(self.conv21_bn(self.conv21(skip)))
+        skip = torch.chunk(skip, 2, dim=2)
+        skip = torch.cat(skip, dim=1)
+        skip = torch.chunk(skip, 2, dim=3)
+        skip = torch.cat(skip, dim=1)
+
+        x = torch.cat((x, skip), dim=1)
+        x = F.leaky_relu(self.conv22_bn(self.conv22(x)))
+        x = F.leaky_relu(self.conv23(x))
+        x = x.transpose(1, 2)
+        x = x.transpose(2, 3)
+        return x
+
 """
 weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
 layerlist = get_weights(weightspath)

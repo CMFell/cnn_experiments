@@ -1,5 +1,5 @@
 import torch
-from trch_yolonet import YoloNet, YoloNetSimp
+from trch_yolonet import YoloNet, YoloNetSimp, YoloNetOrig
 from trch_import import AnimalBoundBoxDataset, ToTensor, MakeMat
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -24,9 +24,8 @@ def simple_nms(boxes_in, thresh):
     flns = boxes_in.file
     cnfs = boxes_in.conf
     clzz = boxes_in['class']
-    tpz = boxes_in['tp']
 
-    boxes_ot = pd.DataFrame(columns=["xc", "yc", "wid", "hei", "file", "conf", "class", "tp"])
+    boxes_ot = pd.DataFrame(columns=["xc", "yc", "wid", "hei", "file", "conf", "class"])
 
     xmins = np.array(xmins.tolist())
     xmaxs = np.array(xmaxs.tolist())
@@ -35,7 +34,6 @@ def simple_nms(boxes_in, thresh):
     flns = np.array(flns.tolist())
     cnfs = np.array(cnfs.tolist())
     clzz = np.array(clzz.tolist())
-    tpz = np.array(tpz.tolist())
 
     while len(xmins) > 0:
 
@@ -67,7 +65,7 @@ def simple_nms(boxes_in, thresh):
         mask_bxs = np.greater(ious, thresh)
 
         if np.sum(mask_bxs) > 0:
-            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class", "tp"])
+            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class"])
             xmns = xmns[mask_bxs]
             xmxs = xmxs[mask_bxs]
             ymns = ymns[mask_bxs]
@@ -85,7 +83,6 @@ def simple_nms(boxes_in, thresh):
             box_ot.file.iloc[0] = flns[0]
             box_ot.conf.iloc[0] = cnfs[0]
             box_ot['class'].iloc[0] = clzz[0]
-            box_ot['tp'].iloc[0] = tpz[0]
 
             mask_out = np.repeat(False, len(xmins))
             mask_out[0] = True
@@ -99,9 +96,8 @@ def simple_nms(boxes_in, thresh):
             flns = flns[mask_out]
             cnfs = cnfs[mask_out]
             clzz = clzz[mask_out]
-            tpz = tpz[mask_out]
         else:
-            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class", "tp"])
+            box_ot = pd.DataFrame(index=[1], columns=["xc", "yc", "wid", "hei", "file", "conf", "class"])
             box_ot.xc.iloc[0] = (xmn + xmx) / 2
             box_ot.yc.iloc[0] = (ymn + ymx) / 2
             box_ot.wid.iloc[0] = xmx - xmn
@@ -109,7 +105,6 @@ def simple_nms(boxes_in, thresh):
             box_ot.file.iloc[0] = flns[0]
             box_ot.conf.iloc[0] = cnfs[0]
             box_ot['class'].iloc[0] = clzz[0]
-            box_ot['tp'].iloc[0] = tpz[0]
 
             mask_out = np.repeat(False, len(xmins))
             mask_out[0] = True
@@ -121,7 +116,6 @@ def simple_nms(boxes_in, thresh):
             flns = flns[mask_out]
             cnfs = cnfs[mask_out]
             clzz = clzz[mask_out]
-            tpz = tpz[mask_out]
         boxes_ot = pd.concat((boxes_ot, box_ot), axis=0)
 
     return boxes_ot
@@ -132,7 +126,7 @@ def softmax(x):
     return e_x / e_x.sum()
 
 
-def yolo_output_to_box(y_pred, namez, dict_in):
+def yolo_output_to_box(y_pred, namez, dict_in, truthz):
     # compares output from cnn with ground truth to calculate loss
     # only for one image at the moment
 
@@ -189,18 +183,17 @@ def yolo_output_to_box(y_pred, namez, dict_in):
     size_cnn = np.divide(size_cnn, size3)
     class_cnn = expit(y_pred[:, :, :, :, 5:])
 
-    boxes_out = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class', 'tp'])
+    boxes_out = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class','tp'])
     scores_out = []
     classes_out = []
 
     for img in range(n_bat):
         filen = namez[img]
-        truth_file = filen[:-4] + '.txt'
-        truthz = pd.read_csv(truth_file, header=None, sep=' ', names=['class', 'xc', 'yc', 'wid', 'hei'])
-        box_img = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class', 'tp'])
+        box_img = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class','tp'])
         for yc in range(boxsy):
             for xc in range(boxsx):
                 for ab in range(nanchors):
+                    #print(confs_cnn[img, yc, xc, ab])
                     if confs_cnn[img, yc, xc, ab] > thresh:
                         scores_out.append(confs_cnn[img, yc, xc, ab])
                         class_out = np.argmax(class_cnn[img, yc, xc, ab, :])
@@ -219,42 +212,73 @@ def yolo_output_to_box(y_pred, namez, dict_in):
             box_img_ot = simple_nms(box_img, 0.1)
             boxes_out = pd.concat((boxes_out, box_img_ot), axis=0)
 
+
     output = [boxes_out, scores_out, classes_out]
 
     return output
 
 
-files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid1248_multi/"
-weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
-
-save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
-save_name = "testing_save_"
-save_path = save_dir + save_name + str(46) + ".pt"
-
-grid_w = int(1856 / 32)
-grid_h = int(1248 / 32)
-n_box = 5
-out_len = 11
-fin_size = n_box * out_len
-input_vec = [grid_w, grid_h, n_box, out_len]
+### VEDAI
+# files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_valid/"
+# save_dir = "/home/cmf21/pytorch_save/VEDAI/"
+# grid_w = int(1024 / 32)
+# grid_h = int(1024 / 32)
+# max_annotations = 19
+# out_len = 14
+# anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+#            [5.319540, 6.116692]]
 # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
 #            [0.437500, 0.328125]]
-anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889], [5.319540, 6.116692]]
 
-animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid,
-                                       inputvec=input_vec,
-                                       anchors=anchors,
-                                       transform=transforms.Compose([
-                                               MakeMat(input_vec, anchors),
-                                               ToTensor()
-                                           ])
-                                       )
+### INRIA
+files_location_valid = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid/"
+save_dir = "/home/cmf21/pytorch_save/INRIA/"
+grid_w = int(640 / 32)
+grid_h = int(480 / 32)
+max_annotations = 20
+out_len = 6
+nn = 43
+anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+            [5.319540, 6.116692]]
+# anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+#            [0.437500, 0.328125]]
 
-animalloader_valid = DataLoader(animal_dataset_valid_sm, batch_size=1, shuffle=False)
+### GFRC
+# files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_multi/"
+# save_dir = "/home/cmf21/pytorch_save/GFRC/"
+# grid_w = int(1856 / 16)
+# grid_h = int(1248 / 16)
+# max_annotations = 14
+# out_len = 11
+# anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+#            [5.319540, 6.116692]]
+# anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+#            [0.437500, 0.328125]]
+
+### continue
+
+weightspath = "/data/old_home_dir/ChrissyF/GFRC/yolov2.weights"
+save_name = "testing_save_"
+save_path = save_dir + save_name + str(nn) + ".pt"
+n_box = 5
+fin_size = n_box * out_len
+input_vec = [grid_w, grid_h, n_box, out_len]
+
+animal_dataset_valid = AnimalBoundBoxDataset(root_dir=files_location_valid,
+                                                inputvec=input_vec,
+                                                anchors=anchors,
+                                                maxann=max_annotations,
+                                                transform=transforms.Compose([
+                                                    MakeMat(input_vec, anchors),
+                                                    ToTensor()
+                                                    ])
+                                                )
+
+animalloader_valid = DataLoader(animal_dataset_valid, batch_size=1, shuffle=False)
 
 layerlist = get_weights(weightspath)
 
-net = YoloNet(layerlist, fin_size)
+net = YoloNetOrig(layerlist, fin_size)
 net = net.to(device)
 net.load_state_dict(torch.load(save_path))
 net.eval()
@@ -265,7 +289,7 @@ fnfn = 0
 i = 0
 
 # define values for calculating loss
-input_shape = (1248, 1856, 3)
+input_shape = (grid_h, grid_w, 3)
 # anchors_in = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
 #               [0.437500, 0.328125]]
 anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
@@ -299,14 +323,15 @@ for data in animalloader_valid:
     images = data["image"]
     images = images.to(device)
     bndbxs = data["bndbxs"]
-    # bndbxs = bndbxs.to(device)
+    bndbxs_np = bndbxs.cpu().numpy()
+    bndbxs_pd = pd.DataFrame(data=bndbxs_np[0,:,:], columns=['class', 'xc', 'yc', 'wid', 'hei'])
     y_true = data["y_true"]
     y_true = y_true.to(device)
     filen = data["name"]
     # print("epoch", epoch, "batch", i)
     y_pred = net(images)
 
-    pboxes, tottr, tottp = accuracyiou(y_pred, bndbxs, filen, anchors_in, 0.5, 0.1)
+    pboxes, tottr, tottp = accuracyiou(y_pred, bndbxs, filen, anchors_in, 0.3, 0.1)
     tottrue += tottr
     tottps += tottp
     print(tottrue, tottps)
@@ -319,14 +344,13 @@ for data in animalloader_valid:
     tptp += np.sum(pboxes.tp)
     fpfp += pboxes.shape[0] - np.sum(pboxes.tp)
     y_pred_np = y_pred.data.cpu().numpy()
-    output_img = yolo_output_to_box(y_pred_np, filen, dict_deets)
+    output_img = yolo_output_to_box(y_pred_np, filen, dict_deets, bndbxs_pd)
     boxes_out_all = boxes_out_all.append(output_img[0], ignore_index=True)
     #print("boa", boxes_out_all.shape[0])
     i += 1
 
-
-print("epoch", 46, "TP", tottps, "FP", fpfp, "FN", (tottrue - tottps), "Recall", tottps / tottrue, "FPPI", fpfp / 131)
-output_path = save_dir + "boxes_out" + str(46) + "_full.csv"
+print("epoch", nn, "TP", tottps, "FP", fpfp, "FN", (tottrue - tottps), "Recall", tottps / tottrue, "FPPI", fpfp / 131)
+output_path = save_dir + "boxes_out" + str(nn) + "_full.csv"
 boxes_out_all.to_csv(output_path)
 
 #print(boxes_out_all.shape[0])

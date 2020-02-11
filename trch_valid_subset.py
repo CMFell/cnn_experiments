@@ -1,9 +1,9 @@
 import torch
-from trch_yolonet import YoloNet, YoloNetSimp
+from trch_yolonet import YoloNet, YoloNetSimp, YoloNetOrig
 from trch_import import AnimalBoundBoxDataset, ToTensor, MakeMat
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-from trch_accuracy import accuracy, accuracyiou
+from trch_accuracy import accuracy, calc_iou_centwh, accuracyiou
 from trch_weights import get_weights
 import numpy as np
 import pandas as pd
@@ -126,7 +126,7 @@ def softmax(x):
     return e_x / e_x.sum()
 
 
-def yolo_output_to_box(y_pred, namez, dict_in):
+def yolo_output_to_box(y_pred, namez, dict_in, truthz):
     # compares output from cnn with ground truth to calculate loss
     # only for one image at the moment
 
@@ -183,13 +183,13 @@ def yolo_output_to_box(y_pred, namez, dict_in):
     size_cnn = np.divide(size_cnn, size3)
     class_cnn = expit(y_pred[:, :, :, :, 5:])
 
-    boxes_out = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
+    boxes_out = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class','tp'])
     scores_out = []
     classes_out = []
 
     for img in range(n_bat):
         filen = namez[img]
-        box_img = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
+        box_img = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class','tp'])
         for yc in range(boxsy):
             for xc in range(boxsx):
                 for ab in range(nanchors):
@@ -200,7 +200,14 @@ def yolo_output_to_box(y_pred, namez, dict_in):
                         classes_out.append(class_out)
                         box_img.loc[len(box_img)] = [cent_cnn[img, yc, xc, ab, 0], cent_cnn[img, yc, xc, ab, 1],
                                                          size_cnn[img, yc, xc, ab, 0], size_cnn[img, yc, xc, ab, 1],
-                                                         filen, confs_cnn[img, yc, xc, ab], class_out]
+                                                         filen, confs_cnn[img, yc, xc, ab], class_out, 0]
+                        # calc iou with truths
+                        for tr in range(truthz.shape[0]):
+                            iou = calc_iou_centwh(box_img.loc[len(box_img) - 1], truthz.iloc[tr])
+                            if iou > 0.3:
+                                box_img['tp'].loc[len(box_img) - 1] = 1
+
+                        # tp = torch.sum(poz & truez)
         if box_img.shape[0] > 0:
             box_img_ot = simple_nms(box_img, 0.1)
             boxes_out = pd.concat((boxes_out, box_img_ot), axis=0)
@@ -212,33 +219,60 @@ def yolo_output_to_box(y_pred, namez, dict_in):
 
 for xx in range(2, 50):
 
-    files_location_valid = "E:/CF_Calcs/BenchmarkSets/GFRC/yolo_valid1248_multi_subset/"
-    weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
+    print(xx)
 
-    save_dir = "E:/CF_Calcs/BenchmarkSets/GFRC/pytorch_save/"
-    save_name = "testing_save_"
-    save_path = save_dir + save_name + str(xx) + ".pt"
+    ### VEDAI
+    files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_valid_sm/"
+    save_dir = "/home/cmf21/pytorch_save/VEDAI/"
+    grid_w = int(1024 / 32)
+    grid_h = int(1024 / 32)
+    max_annotations = 19
+    out_len = 14
+    anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+                 [5.319540, 6.116692]]
+    # anchors_in = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+    #            [0.437500, 0.328125]]
 
-    grid_w = int(1856 / 32)
-    grid_h = int(1248 / 32)
-    # simplified net
+    ### INRIA
+    # files_location_valid = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid_sm/"
+    # save_dir = "/home/cmf21/pytorch_save/INRIA/"
+    # grid_w = int(640 / 32)
+    # grid_h = int(480 / 32)
+    # max_annotations = 8
+    # out_len = 6
+    # anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+    #            [5.319540, 6.116692]]
+    # anchors_in = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+    #            [0.437500, 0.328125]]
+
+    ### GFRC
+    # files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_multi_subset/"
+    # save_dir = "/home/cmf21/pytorch_save/GFRC/"
     # grid_w = int(1856 / 16)
     # grid_h = int(1248 / 16)
+    # max_annotations = 14
+    # out_len = 11
+    # anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+    #            [5.319540, 6.116692]]
+    # anchors_in = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+    #            [0.437500, 0.328125]]
+
+    ### continue
+    
+    weightspath = "/data/old_home_dir/ChrissyF/GFRC/yolov2.weights"
+    save_name = "testing_save_"
+    save_path = save_dir + save_name + str(xx) + ".pt"
     n_box = 5
-    out_len = 11
     fin_size = n_box * out_len
     input_vec = [grid_w, grid_h, n_box, out_len]
-    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-                  [5.319540, 6.116692]]
-    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-    #            [0.437500, 0.328125]]
-    #anchors = np.divide(anchors, 2.0)
+    
 
     animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid,
                                            inputvec=input_vec,
-                                           anchors=anchors,
+                                           anchors=anchors_in,
+                                           maxann=max_annotations,
                                            transform=transforms.Compose([
-                                                   MakeMat(input_vec, anchors),
+                                                   MakeMat(input_vec, anchors_in),
                                                    ToTensor()
                                                ])
                                            )
@@ -247,7 +281,7 @@ for xx in range(2, 50):
 
     layerlist = get_weights(weightspath)
 
-    net = YoloNet(layerlist, fin_size)
+    net = YoloNetOrig(layerlist, fin_size)
     net = net.to(device)
     net.load_state_dict(torch.load(save_path))
     net.eval()
@@ -258,19 +292,14 @@ for xx in range(2, 50):
     i = 0
 
     # define values for calculating loss
-    input_shape = (1248, 1856, 3)
-    anchors_in = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-                  [5.319540, 6.116692]]
-    # anchors_in = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-    #               [0.437500, 0.328125]]
-    #anchors_in = np.divide(anchors_in, 2.0)
+    input_shape = (grid_h, grid_w, 3)
     anchors_in = np.array(anchors_in)
     box_size = [32, 32]
     anchor_pixel = np.multiply(anchors_in, box_size)
     img_x_pix = input_shape[1]
     img_y_pix = input_shape[0]
-    boxs_x = np.ceil(img_x_pix / 32)
-    boxs_y = np.ceil(img_y_pix / 32)
+    boxs_x = np.ceil(img_x_pix / box_size[0])
+    boxs_y = np.ceil(img_y_pix / box_size[1])
     # simplify net
     # boxs_x = np.ceil(img_x_pix / 16)
     # boxs_y = np.ceil(img_y_pix / 16)
@@ -278,11 +307,11 @@ for xx in range(2, 50):
     lambda_c = 5.0
     lambda_no = 0.5
     batch_size = 8
-    threshold = 0.5
+    threshold = 0.3
     dict_deets = {'boxs_x': boxs_x, 'boxs_y': boxs_y, 'img_x_pix': img_x_pix, 'img_y_pix': img_y_pix,
                   'anchors': anchors_in, 'n_classes': classes_in, 'lambda_coord': lambda_c, 'lambda_noobj': lambda_no,
                   'base_dir': files_location_valid, 'batch_size': batch_size, 'threshold': threshold}
-    boxes_out_all = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class'])
+    boxes_out_all = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'file', 'conf', 'class','tp'])
     scores_out_all = []
     classes_out_all = []
 
@@ -297,7 +326,8 @@ for xx in range(2, 50):
         images = data["image"]
         images = images.to(device)
         bndbxs = data["bndbxs"]
-        # bndbxs = bndbxs.to(device)
+        bndbxs_np = bndbxs.cpu().numpy()
+        bndbxs_pd = pd.DataFrame(data=bndbxs_np[0,:,:], columns=['class', 'xc', 'yc', 'wid', 'hei'])
         y_true = data["y_true"]
         y_true = y_true.to(device)
         filen = data["name"]
@@ -313,7 +343,7 @@ for xx in range(2, 50):
         # fpfp += accz[1].data.item()
         # fnfn += accz[2].data.item()
         y_pred_np = y_pred.data.cpu().numpy()
-        output_img = yolo_output_to_box(y_pred_np, filen, dict_deets)
+        output_img = yolo_output_to_box(y_pred_np, filen, dict_deets, bndbxs_pd)
         boxes_out_all = boxes_out_all.append(output_img[0], ignore_index=True)
         i += 1
 
@@ -324,9 +354,4 @@ for xx in range(2, 50):
     #print(boxes_out_all.shape[0])
     #print("Recall", tptp / 399)
     #print("FPPI", boxes_out_all.shape[0] / 131)
-
-
-
-
-
 
