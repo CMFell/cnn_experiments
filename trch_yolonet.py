@@ -335,7 +335,7 @@ class YoloNetSimp(nn.Module):
 
 class YoloNetOrig(nn.Module):
 
-    def __init__(self, layerz, finsize):
+    def __init__(self, layerz, finsize, channelsin):
         super(YoloNetOrig, self).__init__()
         # kernel
         def processweights(weightz, flin, chnl, size):
@@ -349,8 +349,11 @@ class YoloNetOrig(nn.Module):
         def processbias(weightz):
             biaz = torch.from_numpy(weightz)
             return biaz
-        self.conv1 = nn.Conv2d(3, 32, 3, 1, 1)
-        self.conv1.weight.data = processweights(layerz["conv_1"], 32, 3, 3)
+        self.conv1 = nn.Conv2d(channelsin, 32, 3, 1, 1)
+        conv1_weights = processweights(layerz["conv_1"], 32, 3, 3)
+        if channelsin == 1:
+            conv1_weights = torch.mean(conv1_weights, dim=1, keepdim=True)
+        self.conv1.weight.data = conv1_weights
         self.conv1_bn = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 64, 3, 1, 1)
         self.conv2.weight.data = processweights(layerz["conv_2"], 64, 32, 3)

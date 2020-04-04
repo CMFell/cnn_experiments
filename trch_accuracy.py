@@ -62,6 +62,7 @@ def pred_to_box(pred_in, filenmz, ankbox, thresh):
 
 
 def calc_iou_centwh(box1, box2):
+
     xmn1 = box1.xc - box1.wid / 2
     xmx1 = box1.xc + box1.wid / 2
     ymn1 = box1.yc - box1.hei / 2

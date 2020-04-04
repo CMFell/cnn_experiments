@@ -7,7 +7,7 @@ class YoloLoss(torch.nn.Module):
     def __init__(self):
         super(YoloLoss, self).__init__()
 
-    def forward(self, outputs, samp_bndbxs, y_true, anchors, no_obj_thresh, scalez, cell_grid, ep):
+    def forward(self, outputs, samp_bndbxs, y_true, anchors, scalez, cell_grid, ep, no_obj_thresh):
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -177,6 +177,11 @@ class YoloLoss(torch.nn.Module):
 
             return iouscores
 
+        obj_scale = scalez[0]
+        no_obj_scale = scalez[1]
+        class_scale = scalez[2]
+        coord_scale = scalez[3]
+
         # Reshape predictions
         y_pred = reshape_ypred(outputs)
 
@@ -223,11 +228,6 @@ class YoloLoss(torch.nn.Module):
 
         # print("xywi", round(torch.max(pred_xy_wi).item(), 2), round(torch.min(pred_xy_wi).item(), 2),
         #       "whwi", round(torch.max(pred_wh_wi).item(), 2), round(torch.min(pred_wh_wi).item(), 2))
-
-        obj_scale = scalez[0]
-        no_obj_scale = scalez[1]
-        class_scale = scalez[2]
-        coord_scale = scalez[3]
 
         loss_conf = iou_scores - cf_pred
         loss_conf = torch.pow(loss_conf, 2)

@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 class AnimalBoundBoxDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, root_dir, inputvec, anchors, maxann, transform=None):
+    def __init__(self, root_dir, inputvec, anchors, maxann, transform=None, gray=False):
         """
         Args:
             root_dir (string): Directory with all the images.
@@ -28,13 +28,14 @@ class AnimalBoundBoxDataset(Dataset):
         for ff in range(len(self.files_list)):
             self.files_list[ff] = self.files_list[ff][:-4]
         self.files_list = np.unique(self.files_list)
+        self.gray = gray
 
     def __len__(self):
         return len(self.files_list)
 
     def __getitem__(self, idx):
         img_name = self.root_dir + self.files_list[idx] + ".png"
-        image = io.imread(img_name)
+        image = io.imread(img_name, as_gray=self.gray)
         image = np.divide(image, 255.0)
         bndbxs_name = self.root_dir + self.files_list[idx] + ".txt"
         bndbxs = pd.read_csv(bndbxs_name, sep=' ', header=None, names=['class', 'xc', 'yc', 'wid', 'hei'])
@@ -220,7 +221,10 @@ class ToTensor(object):
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
-        image = image.transpose((2, 0, 1))
+        if len(image.shape) == 3:
+            image = image.transpose((2, 0, 1))
+        else:
+            image = np.expand_dims(image, axis=0)
         image = torch.from_numpy(image).type(torch.FloatTensor)
         bndbxs = torch.from_numpy(bndbxs).type(torch.FloatTensor)
         ytrue = torch.from_numpy(ytrue).type(torch.FloatTensor)
