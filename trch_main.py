@@ -8,16 +8,17 @@ import torch
 import numpy as np
 from trch_accuracy import accuracy
 from trch_weights import get_weights
+
 import json
 
 print(torch.cuda.is_available())
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-dataset_to_use = 'VEDAI'
-bin_yn = True
-grey_tf = True 
+dataset_to_use = 'GFRC'
+bin_yn = False
+grey_tf = False
 orig_size = True 
-name_out = 'grey_baseline'
+name_out = 'rgb_baseline'
 
 if dataset_to_use == 'GFRC':
     # GFRC values
@@ -135,7 +136,6 @@ animal_dataset = AnimalBoundBoxDataset(root_dir=files_location,
 
 
 animalloader = DataLoader(animal_dataset, batch_size=bat_sz, shuffle=True)
-# animalloader_valid = DataLoader(animal_dataset_valid, batch_size=bat_sz, shuffle=False)
 
 layerlist = get_weights(weightspath)
 
@@ -147,8 +147,6 @@ net.load_state_dict(torch.load(save_path))
 opt = optim.SGD(net.parameters(), lr=learn_rate, momentum=moment, weight_decay=weight_d)
 i = 0
 
-# for sampe in range(len(animalloader)):
-# for i, data in enumerate(animalloader):
 for epoch in range(200, 300):
     tptp = 0
     fpfp = 0
@@ -161,7 +159,7 @@ for epoch in range(200, 300):
         bndbxs = bndbxs.to(device)
         ytrue = data["y_true"]
         ytrue = ytrue.to(device)
-        # print("epoch", epoch, "batch", i)
+        
         ypred = net(images)
 
         criterion = YoloLoss()
@@ -177,73 +175,12 @@ for epoch in range(200, 300):
         tptp += accz[0].data.item()
         fpfp += accz[1].data.item()
         fnfn += accz[2].data.item()
-        #if i == 0:
-            #print(loss)
-            #break
 
         i = i + 1
-        # print("epoch", epoch, "batch", i, "TP", accz[0].data.item(), "FP", accz[1].data.item(), "FN", accz[2].data.item())
-        # print(" ")
-        # get the inputs; data is a list of [inputs, labels]
-        #inputs, labels = animalloader
-        #output = net(inputs)
+
     print("epoch", epoch, tptp, fpfp, fnfn)
-
-    """
-    opt.zero_grad()
-
-    net.eval()
-    with torch.no_grad():
-        tptptp = 0
-        fpfpfp = 0
-        fnfnfn = 0
-        valid_loss = 0
-        for data in animalloader_validsm:
-            images = data["image"]
-            images = images.to(device)
-            bndbxs = data["bndbxs"]
-            bndbxs = bndbxs.to(device)
-            ytrue = data["y_true"]
-            ytrue = ytrue.to(device)
-            # print("epoch", epoch, "batch", i)
-            ypred = net(images)
-
-            criterion = YoloLoss()
-            valid_loss += criterion(ypred, bndbxs, ytrue, anchors_in, 0.3, scalez, cell_grid, tot_bat)
-            accz = accuracy(ypred, ytrue, 0.3)
-            tptptp += accz[0].data.item()
-            fpfpfp += accz[1].data.item()
-            fnfnfn += accz[2].data.item()
-
-    val_loss_out = valid_loss / len(animalloader_validsm)
-    print("epoch valid", i, "TP valid", tptptp, "FP valid", fpfpfp, "FN valid", fnfnfn,
-          "loss", round(val_loss_out.data.item(), 2))
-    """
+    save_path = save_dir + save_name + str(epoch) + ".pt"
+    torch.save(net.cpu().state_dict(), save_path)
+    net = net.to(device)
 
     i = 0
-
-    save_path = save_dir + save_name + str(epoch) + ".pt"
-    torch.save(net.state_dict(), save_path)
-
-
-
-"""
-lr = 0.5  # learning rate
-epochs = 2  # how many epochs to train for
-
-model, opt = get_model()
-
-for epoch in range(epochs):
-    for xb, yb in train_dl:
-        pred = model(xb)
-        loss = loss_func(pred, yb)
-
-        loss.backward()
-        opt.step()
-        opt.zero_grad()
-
-print(loss_func(model(xb), yb))
-"""
-    
-
-

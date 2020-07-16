@@ -4,11 +4,14 @@ import numpy as np
 import pandas as pd
 
 
-def create_tiled_data(filez, fl, base_dir, data_list, out_path, windowz, image_shape, final_size, resize=False):
+def create_tiled_data(filez, fl, base_dir, data_list, out_path, windowz, image_shape, final_size, resize=False, multi=False):
     file_name = filez[fl]
+    print(file_name)
     # get root of file name
+    file_to_read = file_name
+    file_name = file_name.split('_')
+    file_name = file_name[0] + '/' + file_name[1] 
     file_out = file_name[:-4]
-    print(file_out)
     # get list of detections in this image
     keep_list = data_list.file_loc == file_name
     file_boxes = data_list[keep_list]
@@ -20,7 +23,7 @@ def create_tiled_data(filez, fl, base_dir, data_list, out_path, windowz, image_s
     file_boxes['ymin'] = np.subtract(file_boxes.yc, file_boxes.hei_half)
     file_boxes['ymax'] = np.add(file_boxes.yc, file_boxes.hei_half)
     # read in image
-    from_loc = base_dir + file_name
+    from_loc = base_dir + file_to_read
     image_in = cv2.imread(from_loc, -1)
     # need windows as both pixels and percentage windowz is in pixels so convert to percentage of image
     wind_pct = np.array(windowz, dtype=np.float)
@@ -70,13 +73,17 @@ def create_tiled_data(filez, fl, base_dir, data_list, out_path, windowz, image_s
                 line.wid = line.wid / (xmax - xmin)
                 line.height = line.height / (ymax - ymin)
                 # output position in window
-                out_string = out_string + str(line.oc) + ' ' + str(line.xc) + ' ' + str(line.yc) + ' '
-                out_string = out_string + str(line.wid) + ' ' + str(line.height) + '\n'
+                if multi:
+                    out_string = out_string + str(line.oc) + ' ' + str(line.xc) + ' ' + str(line.yc) + ' '
+                    out_string = out_string + str(line.wid) + ' ' + str(line.height) + '\n'
+                else:
+                    out_string = out_string + str(0) + ' ' + str(line.xc) + ' ' + str(line.yc) + ' '
+                    out_string = out_string + str(line.wid) + ' ' + str(line.height) + '\n'
         if len(out_string) > 0:
             # get rid of final line separator
             out_string = out_string[:-1]
         else:
-            out_string = "NA NA NA NA NA"
+            out_string = ""
         # if filename contains a directory split out
         split_filename = file_out.split("/")
         if len(split_filename) > 1:
@@ -87,12 +94,10 @@ def create_tiled_data(filez, fl, base_dir, data_list, out_path, windowz, image_s
             file_out = file_out[:-1]
         # get image file name
         out_img_name = file_out + '_' + str(wnd) + '.png'
-        print(out_img_name)
         # get just this window from image and write it out
         image_out = image_in[windowz[wnd, 0]:windowz[wnd, 2], windowz[wnd, 1]:windowz[wnd, 3]]
         if resize:
             image_out = cv2.resize(image_out, final_size)
-        print(out_path + out_img_name)
         cv2.imwrite(out_path + out_img_name, image_out)
         # create text file name and write output to text file
         txt_out = file_out + '_' + str(wnd) + '.txt'
@@ -103,19 +108,21 @@ def create_tiled_data(filez, fl, base_dir, data_list, out_path, windowz, image_s
 
 # GFRC input
 # Directory with files
-basedir = 'E:/'
+basedir = '/data/old_home_dir/ChrissyF/GFRC/Valid/whole_images_all/'
 # List of boxes
-csv_name = 'CF_Calcs/BenchmarkSets/GFRC/yolo_test_GFRC_bboxes.csv'
+csv_name = '/data/old_home_dir/ChrissyF/GFRC/yolo_valid_GFRC_bboxes.csv'
 # Full path csv
-csv_file = basedir + csv_name
+# csv_file = basedir + csv_name
 # folder to save in
-out_folder = 'CF_Calcs/BenchmarkSets/GFRC/yolo_copy_valid_img/'
-outpath = basedir + out_folder
+outpath = '/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_multi/'
+# outpath = basedir + out_folder
 # Read in csv file
-datalist = pd.read_csv(csv_file)
+datalist = pd.read_csv(csv_name)
 
 # Get list of unique filenames
-filez_in = np.unique(datalist.file_loc)
+# filez_in = np.unique(datalist.file_loc)
+filez_in = os.listdir(basedir)
+filez_in = [f for f in os.listdir(basedir) if os.path.isfile(os.path.join(basedir, f))]
 
 # for debugging purposes
 # filez = filez[0:20]
@@ -123,7 +130,7 @@ filez_in = np.unique(datalist.file_loc)
 # windowz to cut out - start rows, start cols, end rows, end cols
 
 input_shape = [4912, 7360]
-size_out = [192, 288]
+size_out = [1248, 1856]
 
 row_st = 0
 row_ed = size_out[0]
@@ -151,7 +158,6 @@ col_ed = input_shape[1]
 col_st = col_ed - size_out[1]
 gfrccolst.append(col_st)
 gfrccoled.append(col_ed)
-print(gfrccolst)
 nrow = len(gfrcrowst)
 ncol = len(gfrccolst)
 gfrcrowst = np.reshape(np.tile(gfrcrowst, ncol), (nrow * ncol, 1))
@@ -163,15 +169,18 @@ gfrcwindz = np.array(gfrcwindz, dtype=np.int)
 
 gfrcwindz = np.array(gfrcwindz)
 gfrcsize = [4912, 7360]
-resize = True
+resize = False
 finsize = size_out
 if resize:
     finsize = (size_out[1]*2, size_out[0]*2)
 print(gfrcwindz)
 
+
 # copy image to folder and create text file to go with it
-for ff in range(filez_in.shape[0]):
-    create_tiled_data(filez_in, ff, basedir, datalist, outpath, gfrcwindz, gfrcsize, finsize, resize=resize)
+for ff in range(len(filez_in)):
+    create_tiled_data(filez_in, ff, basedir, datalist, outpath, gfrcwindz, gfrcsize, finsize, resize=resize, multi=True)
+
+"""
 
 # create train.txt list of images
 out_folder_list = os.listdir(outpath)
@@ -188,3 +197,4 @@ train_string = train_string[:-1]
 train_txt_path = outpath + "gfrc_test.txt"
 with open(train_txt_path, "w") as textfile:
     textfile.write(train_string)
+"""

@@ -276,12 +276,12 @@ class YoloLoss(torch.nn.Module):
 
         # outz = [loss_conf, loss_noconf, loss_class, loss_wh, loss_xy]
         loss = loss_conf + loss_noconf + loss_wh + loss_xy + loss_class
-        print("total loss", round(loss.item(), 2),
-              "conf", round(loss_conf.item(), 2),
-              "noconf", round(loss_noconf.item(), 2),
-              "class", round(loss_class.item(), 2),
-              "size", round(loss_wh.item(), 2),
-              "centre", round(loss_xy.item(), 2))
+        # print("total loss", round(loss.item(), 2),
+        #       "conf", round(loss_conf.item(), 2),
+        #       "noconf", round(loss_noconf.item(), 2),
+        #       "class", round(loss_class.item(), 2),
+        #       "size", round(loss_wh.item(), 2),
+        #      "centre", round(loss_xy.item(), 2))
 
         return loss
 

@@ -12,72 +12,98 @@ from scipy.special import expit
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-### VEDAI
-img_w = 1024
-img_h = 1024
-max_annotations = 19
-anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-           [5.319540, 6.116692]]
-valid_imgs = 242
-# Multi
-files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_multi_valid/"
-save_dir = "/home/cmf21/pytorch_save/VEDAI/Multi/"
-# nn = 42 # colour
-nn = 289 # bw
-nclazz = 9
-# Bin
-# files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_bin_valid/"
-# save_dir = "/home/cmf21/pytorch_save/VEDAI/Bin/Baseline/"
-# nn = 38
-# nclazz = 1
-# anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-#            [0.437500, 0.328125]]
+dataset_to_use = 'VEDAI'
+bin_yn = False
+grey_tf = False
+orig_size = True 
+name_out = 'rgb_baseline'
 
-### INRIA
-# img_w = 640
-# img_h = 480
-# max_annotations = 20
-# valid_imgs = 741
-# anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-#            [5.319540, 6.116692]]
-# anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-#            [0.437500, 0.328125]]
-# files_location_valid = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid/"
-# save_dir = "/home/cmf21/pytorch_save/INRIA/"
-# nclazz = 1
-# nn = 43 # color
-# nn = 50 # bw
-
-### GFRC
-# img_w = 1856
-# img_h = 1248
-# max_annotations = 14
-# anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-#            [5.319540, 6.116692]]
-# valid_imgs = int(2096 / 16) # 131 whole images split into 16 so 2096 tiles
-# anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-#            [0.437500, 0.328125]]
-# Multi
-# files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_multi/"
-# save_dir = "/home/cmf21/pytorch_save/GFRC/Multi/Baseline/"
-# nclazz = 6
-# nn = 92
-# Bin
-# files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_bin/"
-# save_dir = "/home/cmf21/pytorch_save/GFRC/Bin/"
-# nclazz = 1
-# nn = 70
-
-# Original net size
-box_size = [32, 32]
-# Simplified net size
-# box_size = [16, 16]
-
+if dataset_to_use == 'VEDAI':
+    ### VEDAI
+    img_w = 1024
+    img_h = 1024
+    max_annotations = 19
+    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+            [5.319540, 6.116692]]
+    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+    #            [0.437500, 0.328125]]
+    valid_imgs = 242
+    if bin_yn:
+        # Bin
+        files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_bin_valid/"
+        save_dir = "/home/cmf21/pytorch_save/VEDAI/Bin/" + name_out + "/"
+        nclazz = 1
+        if name_out == 'grey_baseline':
+            nn = 484 # bw
+        elif name_out == 'rgb_baseline':
+            nn = 922 # rgb
+        elif name_out == 'grey_baseline2':
+            nn = 929 # bw # 882
+    else:
+        # Multi
+        files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_multi_valid/"
+        save_dir = "/home/cmf21/pytorch_save/VEDAI/Multi/" + name_out + "/"
+        nclazz = 9
+        if name_out == 'grey_baseline':
+            nn = 452 # bw
+        elif name_out == 'rgb_baseline':
+            nn = 111 # colour
+        # nn = 42 # colour
+elif dataset_to_use == 'INRIA':
+    ### INRIA
+    img_w = 640
+    img_h = 480
+    max_annotations = 20
+    valid_imgs = 741
+    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+               [5.319540, 6.116692]]
+    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+    #            [0.437500, 0.328125]]
+    files_location_valid = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid/"
+    save_dir = "/home/cmf21/pytorch_save/INRIA/" + name_out + "/"
+    nclazz = 1
+    if name_out == 'grey_baseline':
+        nn = 63 # bw
+    elif name_out == 'rgb_baseline':
+        nn = 236 # color  
+elif dataset_to_use == 'GFRC':
+    ### GFRC
+    img_w = 1856
+    img_h = 1248
+    max_annotations = 14
+    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
+               [5.319540, 6.116692]]
+    valid_imgs = 312
+    # valid_imgs = int(2096 / 16) # 131 whole images split into 16 so 2096 tiles
+    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
+    #            [0.437500, 0.328125]]
+    if bin_yn:
+            # Bin
+        files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_bin/"
+        save_dir = "/home/cmf21/pytorch_save/GFRC/Bin/" + name_out + "/"
+        nclazz = 1
+        if name_out == 'grey_baseline':
+            nn = 265
+        elif name_out == 'rgb_baseline2':
+            nn = 163
+    else:
+        # Multi
+        files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_multi/"
+        save_dir = "/home/cmf21/pytorch_save/GFRC/Multi/" + name_out + "/"
+        nclazz = 6
+        if name_out == 'grey_baseline':
+            nn = 274
 # colour or greyscale
-# channels_in = 3
-# grey_tf = False
-channels_in = 1
-grey_tf = True
+if grey_tf:
+    channels_in = 1
+else:
+    channels_in = 3
+if orig_size:
+    # Original net size
+    box_size = [32, 32]
+else:
+    # Simplified net size
+    box_size = [16, 16]
 
 ### continue
 weightspath = "/data/old_home_dir/ChrissyF/GFRC/yolov2.weights"
@@ -87,7 +113,6 @@ conf_threshold_summary = 0.3
 iou_threshold_summary = 0.1
 conf_threshold_out = 0.05
 n_box = 5
-colour_yn=False
 
 grid_w = int(img_w / box_size[1])
 grid_h = int(img_h / box_size[0])
@@ -96,7 +121,6 @@ out_len = 5 + nclazz
 fin_size = n_box * out_len
 input_vec = [grid_w, grid_h, n_box, out_len]
 anchors = np.array(anchors)
-input_shape = (img_h, img_w, 3)
 
 animal_dataset_valid = AnimalBoundBoxDataset(root_dir=files_location_valid,
                                                 inputvec=input_vec,
