@@ -12,61 +12,13 @@ from scipy.special import expit
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-dataset_to_use = 'VEDAI'
-bin_yn = False
+dataset_to_use = 'GFRC'
+bin_yn = True
 grey_tf = False
 orig_size = True 
-name_out = 'rgb_baseline'
+name_out = 'rgb_baseline2_hnm'
 
-if dataset_to_use == 'VEDAI':
-    ### VEDAI
-    img_w = 1024
-    img_h = 1024
-    max_annotations = 19
-    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-            [5.319540, 6.116692]]
-    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-    #            [0.437500, 0.328125]]
-    valid_imgs = 242
-    if bin_yn:
-        # Bin
-        files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_bin_valid/"
-        save_dir = "/home/cmf21/pytorch_save/VEDAI/Bin/" + name_out + "/"
-        nclazz = 1
-        if name_out == 'grey_baseline':
-            nn = 484 # bw
-        elif name_out == 'rgb_baseline':
-            nn = 922 # rgb
-        elif name_out == 'grey_baseline2':
-            nn = 929 # bw # 882
-    else:
-        # Multi
-        files_location_valid = "/data/old_home_dir/ChrissyF/VEDAI/yolo_multi_valid/"
-        save_dir = "/home/cmf21/pytorch_save/VEDAI/Multi/" + name_out + "/"
-        nclazz = 9
-        if name_out == 'grey_baseline':
-            nn = 452 # bw
-        elif name_out == 'rgb_baseline':
-            nn = 111 # colour
-        # nn = 42 # colour
-elif dataset_to_use == 'INRIA':
-    ### INRIA
-    img_w = 640
-    img_h = 480
-    max_annotations = 20
-    valid_imgs = 741
-    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-               [5.319540, 6.116692]]
-    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-    #            [0.437500, 0.328125]]
-    files_location_valid = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid/"
-    save_dir = "/home/cmf21/pytorch_save/INRIA/" + name_out + "/"
-    nclazz = 1
-    if name_out == 'grey_baseline':
-        nn = 63 # bw
-    elif name_out == 'rgb_baseline':
-        nn = 236 # color  
-elif dataset_to_use == 'GFRC':
+if dataset_to_use == 'GFRC':
     ### GFRC
     img_w = 1856
     img_h = 1248
@@ -78,21 +30,12 @@ elif dataset_to_use == 'GFRC':
     # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
     #            [0.437500, 0.328125]]
     if bin_yn:
-            # Bin
+        # Bin
         files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_bin/"
         save_dir = "/home/cmf21/pytorch_save/GFRC/Bin/" + name_out + "/"
+        nclazz_hnm = 2
         nclazz = 1
-        if name_out == 'grey_baseline':
-            nn = 265
-        elif name_out == 'rgb_baseline2':
-            nn = 163
-    else:
-        # Multi
-        files_location_valid = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_multi/"
-        save_dir = "/home/cmf21/pytorch_save/GFRC/Multi/" + name_out + "/"
-        nclazz = 6
-        if name_out == 'grey_baseline':
-            nn = 274
+
 # colour or greyscale
 if grey_tf:
     channels_in = 1
@@ -116,10 +59,13 @@ n_box = 5
 
 grid_w = int(img_w / box_size[1])
 grid_h = int(img_h / box_size[0])
-save_path = save_dir + save_name + str(nn) + ".pt"
+save_path = save_dir + save_name + "97.pt"
 out_len = 5 + nclazz
 fin_size = n_box * out_len
 input_vec = [grid_w, grid_h, n_box, out_len]
+out_len_hnm = 5 + nclazz_hnm
+fin_size_hnm = n_box * out_len_hnm
+input_vec_hnm = [grid_w, grid_h, n_box, out_len_hnm]
 anchors = np.array(anchors)
 
 animal_dataset_valid = AnimalBoundBoxDataset(root_dir=files_location_valid,
@@ -138,6 +84,7 @@ animalloader_valid = DataLoader(animal_dataset_valid, batch_size=1, shuffle=Fals
 layerlist = get_weights(weightspath)
 
 net = YoloNetOrig(layerlist, fin_size, channels_in)
+net.conv23 = torch.nn.Conv2d(1024, fin_size_hnm, 1, 1, 0)
 net = net.to(device)
 net.load_state_dict(torch.load(save_path))
 net.eval()
@@ -176,6 +123,7 @@ for data in animalloader_valid:
     boxes_out_all = boxes_out_all.append(output_img, ignore_index=True)
     i += 1
 
+nn = 97
 print(nn, tottps, tottrue, fpfp, valid_imgs)
 print("epoch", nn, "TP", tottps, "FP", fpfp, "FN", (tottrue - tottps), "Recall", tottps / tottrue, "FPPI", fpfp / valid_imgs)
 output_path = save_dir + "boxes_out" + str(nn) + "_full.csv"

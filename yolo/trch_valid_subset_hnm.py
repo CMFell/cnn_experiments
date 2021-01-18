@@ -14,46 +14,12 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 
 dataset_to_use = 'GFRC'
-bin_yn = False
+bin_yn = True
 grey_tf = False
 orig_size = True 
-name_out = 'rgb_baseline'
+name_out = 'rgb_baseline2_hnm'
 
-if dataset_to_use == 'VEDAI':
-    ### VEDAI
-    img_w = 1024
-    img_h = 1024
-    max_annotations = 19
-    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-            [5.319540, 6.116692]]
-    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-    #            [0.437500, 0.328125]]
-    if bin_yn:
-        # Bin
-        files_location_valid_sub = "/data/old_home_dir/ChrissyF/VEDAI/yolo_bin_valid_sm/"
-        save_dir = "/home/cmf21/pytorch_save/VEDAI/Bin/" + name_out + "/"
-        nclazz = 1
-        valid_imgs = 41
-    else: 
-        # Multi
-        files_location_valid_sub = "/data/old_home_dir/ChrissyF/VEDAI/yolo_multi_valid_sm/"
-        save_dir = "/home/cmf21/pytorch_save/VEDAI/Multi/" + name_out + "/"
-        nclazz = 9
-        valid_imgs = 49
-elif dataset_to_use == 'INRIA':
-    ### INRIA
-    files_location_valid_sub = "/data/old_home_dir/ChrissyF/INRIA/yolo_valid_sm/"
-    save_dir = "/home/cmf21/pytorch_save/INRIA/" + name_out + "/"
-    img_w = 640
-    img_h = 480
-    valid_imgs = 147
-    max_annotations = 8
-    nclazz = 1
-    anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.681468, 1.803889],
-               [5.319540, 6.116692]]
-    # anchors = [[0.718750, 0.890625], [0.750000, 0.515625], [0.468750, 0.562500], [1.140625, 1.156250],
-    #            [0.437500, 0.328125]]
-elif dataset_to_use == 'GFRC':
+if dataset_to_use == 'GFRC':
     ### GFRC
     img_w = 1856
     img_h = 1248
@@ -67,12 +33,9 @@ elif dataset_to_use == 'GFRC':
         # Bin
         files_location_valid_sub = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_bin_subset/"
         save_dir = "/home/cmf21/pytorch_save/GFRC/Bin/" + name_out + "/"
+        nclazz_hnm = 2
         nclazz = 1
-    else:
-        # Multi
-        files_location_valid_sub = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid1248_multi_subset/"
-        save_dir = "/home/cmf21/pytorch_save/GFRC/Multi/" + name_out + "/"
-        nclazz = 6
+
 # colour or greyscale
 if grey_tf:
     channels_in = 1
@@ -87,6 +50,7 @@ else:
 
 ### continue
 weightspath = "/data/old_home_dir/ChrissyF/GFRC/yolov2.weights"
+reload_weights = "/home/cmf21/pytorch_save/GFRC/Bin/rgb_baseline2_hnm/testing_save_163.pt"
 save_name = "testing_save_"
 nms_threshold_out = 0.6
 conf_threshold_summary = 0.3
@@ -99,9 +63,12 @@ grid_h = int(img_h / box_size[0])
 out_len = 5 + nclazz
 fin_size = n_box * out_len
 input_vec = [grid_w, grid_h, n_box, out_len]
+out_len_hnm = 5 + nclazz_hnm
+fin_size_hnm = n_box * out_len_hnm
+input_vec_hnm = [grid_w, grid_h, n_box, out_len_hnm]
 anchors = np.array(anchors)
 
-for xx in range(100, 200):
+for xx in range(100):
     # if xx % 10 == 0:
     #     pass
     # else:
@@ -109,11 +76,11 @@ for xx in range(100, 200):
     save_path = save_dir + save_name + str(xx) + ".pt" 
     print(save_path)
     animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid_sub, 
-                                                        inputvec=input_vec,
+                                                        inputvec=input_vec_hnm,
                                                         anchors=anchors,
                                                         maxann=max_annotations,
                                                         transform=transforms.Compose([
-                                                            MakeMat(input_vec, anchors),
+                                                            MakeMat(input_vec_hnm, anchors),
                                                             ToTensor()
                                                         ]),
                                                         gray=grey_tf
@@ -124,6 +91,8 @@ for xx in range(100, 200):
     layerlist = get_weights(weightspath)
 
     net = YoloNetOrig(layerlist, fin_size, channels_in)
+    #net = net.to(device)
+    net.conv23 = torch.nn.Conv2d(1024, fin_size_hnm, 1, 1, 0)
     net = net.to(device)
     net.load_state_dict(torch.load(save_path))
     net.eval()
@@ -146,6 +115,8 @@ for xx in range(100, 200):
         bndbxs = data["bndbxs"]
         bndbxs_np = bndbxs.cpu().numpy()
         bndbxs_pd = pd.DataFrame(data=bndbxs_np[0,:,:], columns=['class', 'xc', 'yc', 'wid', 'hei'])
+        # keep only class 0  that is remove class 1 which is the hnm class
+        bndbxs_pd = bndbxs_pd[bndbxs_pd['class'] == 0]
         y_true = data["y_true"]
         y_true = y_true.to(device)
         filen = data["name"]
