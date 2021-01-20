@@ -11,7 +11,6 @@ warnings.filterwarnings("ignore")
 
 
 class AnimalBoundBoxDataset(Dataset):
-    """Face Landmarks dataset."""
 
     def __init__(self, root_dir, inputvec, anchors, maxann, transform=None, gray=False):
         """

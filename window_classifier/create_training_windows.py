@@ -129,7 +129,7 @@ yolo_output_fil = yolo_output_in.loc[yolo_output_in.tp < 0.01, :]
 #create_negative_patches(neg_windows_df, outputdir_neg, augments_list, 2)
 
 # create valid windows from yolo output subset
-tile_img_size = [1856, 1258]
+tile_img_size = [1856, 1248]
 output_from_yolo_valid = "/home/cmf21/pytorch_save/GFRC/Bin/rgb_baseline2/boxes_out163.csv"
 outputdir_valid_pos = "/data/old_home_dir/ChrissyF/GFRC/window_classifier/valid_bin_class/animal/"
 outputdir_valid_neg = "/data/old_home_dir/ChrissyF/GFRC/window_classifier/valid_bin_class/not_animal/"

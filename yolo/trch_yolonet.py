@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from trch_weights import get_weights
+
 
 class YoloNet(nn.Module):
 
@@ -469,20 +469,3 @@ class YoloNetOrig(nn.Module):
         x = x.transpose(2, 3)
         return x
 
-"""
-weightspath = "E:/CF_Calcs/BenchmarkSets/GFRC/ToUse/Train/yolo-gfrc_6600.weights"
-layerlist = get_weights(weightspath)
-
-net = YoloNetSimp(layerlist)
-#print(net)
-
-input = torch.randn(4, 3, 320, 480)
-print(input)
-
-print(input.size())
-
-output = net(input)
-
-print(output.size())
-
-"""

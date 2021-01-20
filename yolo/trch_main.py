@@ -141,13 +141,13 @@ layerlist = get_weights(weightspath)
 
 net = YoloNetOrig(layerlist, fin_size, channels_in)
 net = net.to(device)
-save_path = save_dir + save_name + str(272) + ".pt"
+#save_path = save_dir + save_name + str(272) + ".pt"
 net.load_state_dict(torch.load(save_path))
 
 opt = optim.SGD(net.parameters(), lr=learn_rate, momentum=moment, weight_decay=weight_d)
 i = 0
 
-for epoch in range(273, 300):
+for epoch in range(300):
     tptp = 0
     fpfp = 0
     fnfn = 0
