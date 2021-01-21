@@ -4,11 +4,11 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from cnn_experiments.window_classifier.utils.tiling import create_tile_list
-from cnn_experiments.window_classifier.models.window_classifier import inference_on_windows
-from cnn_experiments.window_classifier.models.yolo_for_inference import YoloClass
-from cnn_experiments.window_classifier.utils.windows import process_annotation_df_negative, create_windows_from_yolo
-from cnn_experiments.window_classifier.utils.drawing import draw_results_on_image
+from detani.window.utils.tiling import create_tile_list
+from detani.window.models.window_classifier import inference_on_windows
+from detani.window.models.yolo_for_inference import YoloClass
+from detani.window.utils.windows import process_annotation_df_negative, create_windows_from_yolo
+from detani.window.utils.drawing import draw_results_on_image
 
 
 valid_whole_image_dir = "/data/old_home_dir/ChrissyF/GFRC/Valid/whole_images_all/"
@@ -53,4 +53,6 @@ results_per_im = match_results_to_truth(windows_results, truths_im, iou_threshol
 # draw results on image
 image_out = draw_results_on_image(whole_im, results_per_im)
 cv2.imwrite(output_dir + image_file, image_out)
+
+print('TP: ', np.sum(results_per_im.confmat == 'TP'), ' FP: ', np.sum(results_per_im.confmat == 'FP'), ' FN: ', np.sum(results_per_im.confmat == 'FN'))
 
