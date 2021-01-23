@@ -1,8 +1,9 @@
 import numpy as np
+import pandas as pd
 from scipy.special import expit
 
 
-def yolo_output_to_box_test(y_pred, conf_threshold):    
+def yolo_output_to_box_test(y_pred, conf_threshold, anchors):    
     n_bat = y_pred.shape[0]
     # n_bat = int(dict_in['batch_size'])
     boxsx = y_pred.shape[2]
@@ -73,6 +74,6 @@ def yolo_output_to_box_test(y_pred, conf_threshold):
                             ]],
                             columns=['xc', 'yc', 'wid', 'hei', 'conf', 'class']
                         )
-                        box_img = box_img.append(detect_deets)
+                        box_img = pd.concat((box_img, detect_deets), axis=0, sort=False)
     
     return box_img

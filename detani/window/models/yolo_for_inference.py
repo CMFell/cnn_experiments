@@ -1,21 +1,19 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 
+import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms, utils
 
-from cnn_experiments.yolo.trch_weights import get_weights
-from cnn_experiments.yolo.trch_yolonet import YoloNetOrig
-from cnn_experiments.window_classifier.model.yolo_datasets import TileImageTestDataset
-from cnn_experiments.window_classifier,utils.yolo import yolo_output_to_box
+from yolo.trch_weights import get_weights
+from yolo.trch_yolonet import YoloNetOrig
+from window.models.yolo_datasets import TileImageTestDataset
+from window.utils.yolo import yolo_output_to_box_test
 
-def YoloClass(ABC):
-    def __init__(
-        self,
-        saveweightspath: str,
-        channels_in: int
-    ) -> None:
-        self.saveweightspath = saveweightspath
+class YoloClass(ABC):
+    def __init__(self, wtpath, channels):
+        self.saveweightspath = wtpath
 
         ### Yolo parameters
         img_w = 1856
@@ -37,15 +35,15 @@ def YoloClass(ABC):
         grid_w = int(img_w / box_size[1])
         grid_h = int(img_h / box_size[0])
         input_vec = [grid_w, grid_h, n_box, out_len]
-        anchors = np.array(anchors)
+        self.anchors = np.array(anchors)
 
         # Set up model
         layerlist = get_weights(weightspath)
-        self.net = YoloNetOrig(layerlist, fin_size, channels_in)
+        self.net = YoloNetOrig(layerlist, fin_size, channels)
         
-    def inference_on_image(tilez):
+    def inference_on_image(self, tilez, conf_threshold):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        net = net.to(device)
+        net = self.net.to(device)
         net.load_state_dict(torch.load(self.saveweightspath))
         net.eval()
         tile_dataset = TileImageTestDataset(tilez)
@@ -55,8 +53,9 @@ def YoloClass(ABC):
             tile = tile.to(device)
             y_pred = net(tile)
             y_pred_np = y_pred.data.cpu().numpy()
-            boxes_tile = yolo_output_to_box_test(y_pred_np, conf_threshold)
-            boxes_tile['tile'] = idx
-            boxes_whole_im = pd.concat((boxes_whole_im, boxes_tile), axis=0)
+            boxes_tile = yolo_output_to_box_test(y_pred_np, conf_threshold, self.anchors)
+            if boxes_tile.shape[0] > 0:
+                boxes_tile.loc[:, 'tile'] = int(idx)
+                boxes_whole_im = pd.concat((boxes_whole_im, boxes_tile), axis=0, sort=False)
 
         return boxes_whole_im

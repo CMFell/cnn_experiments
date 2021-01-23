@@ -1,5 +1,5 @@
 from torch.utils.data import Dataset
-from torchvision import transforms
+from torchvision.transforms import Compose, ToTensor, Resize, Normalize
 
 class WindowTestDataset(Dataset):
 
@@ -12,9 +12,9 @@ class WindowTestDataset(Dataset):
         """
         #self.landmarks_frame = pd.read_csv(csv_file)
         self.windows_list = windows_list
-        self.transform = transforms.Compose([Resize((299, 299)),
-                                             ToTensor(),
-                                             Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        self.transform = Compose([Resize((299, 299)),
+                                  ToTensor(),
+                                  Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
     def __len__(self):
         return len(self.windows_list)

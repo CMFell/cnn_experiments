@@ -75,7 +75,8 @@ def nms_for_fp(boxes_in, thresh):
         mask_bxs = np.greater(ious, thresh)
 
         if np.sum(mask_bxs) > 0:
-            box_ot = pd.DataFrame(index=[1], columns=['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal'])
+            box_ot = pd.DataFrame(index=range(1), columns=['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal'])
+
             xmns = xmns[mask_bxs]
             xmxs = xmxs[mask_bxs]
             ymns = ymns[mask_bxs]
@@ -84,13 +85,13 @@ def nms_for_fp(boxes_in, thresh):
             anis = anis[mask_bxs]
             nots = nots[mask_bxs]
 
-            box_ot.xmn.iloc[0] = np.min(xmns)
-            box_ot.ymn.iloc[0] = np.min(ymns)
-            box_ot.xmx.iloc[0] = np.max(xmxs)
-            box_ot.ymx.iloc[0] = np.max(ymxs)
-            box_ot.conf.iloc[0] = np.mean(cnfs)
-            box_ot.animal.iloc[0] = np.mean(anis)
-            box_ot.not_animal.iloc[0] = np.mean(nots)
+            box_ot.loc[0, 'xmn'] = np.min(xmns)
+            box_ot.loc[0, 'ymn'] = np.min(ymns)
+            box_ot.loc[0, 'xmx'] = np.max(xmxs)
+            box_ot.loc[0, 'ymx'] = np.max(ymxs)
+            box_ot.loc[0, 'conf'] = np.mean(cnfs)
+            box_ot.loc[0, 'animal'] = np.mean(anis)
+            box_ot.loc[0, 'not_animal'] = np.mean(nots)
 
             mask_out = np.repeat(False, len(xmins))
             mask_out[0] = True
@@ -104,15 +105,17 @@ def nms_for_fp(boxes_in, thresh):
             confs = confs[mask_out]
             anims = anims[mask_out]
             notas = notas[mask_out]
+            
         else:
-            box_ot = pd.DataFrame(index=[1], columns=['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal'])
-            box_ot.xmn.iloc[0] = xmn
-            box_ot.ymn.iloc[0] = ymn
-            box_ot.xmx.iloc[0] = xmx
-            box_ot.ymx.iloc[0] = ymx
-            box_ot.conf.iloc[0] = cnf
-            box_ot.animal.iloc[0] = ani
-            box_ot.not_animal.iloc[0] = ntz
+            box_ot = pd.DataFrame(index=range(1), columns=['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal'])
+
+            box_ot.loc[0, 'xmn'] = xmn
+            box_ot.loc[0, 'ymn'] = ymn
+            box_ot.loc[0, 'xmx'] = xmx
+            box_ot.loc[0, 'ymx'] = ymx
+            box_ot.loc[0, 'conf'] = cnf
+            box_ot.loc[0, 'animal'] = ani
+            box_ot.loc[0, 'not_animal'] = ntz
 
             mask_out = np.repeat(False, len(xmins))
             mask_out[0] = True
@@ -125,20 +128,23 @@ def nms_for_fp(boxes_in, thresh):
             confs = confs[mask_out]
             anims = anims[mask_out]
             notas = notas[mask_out]
-        boxes_ot = pd.concat((boxes_ot, box_ot), axis=0)
-        
-    boxes_ot['confmat'] = 'FP'
-    boxes_ot['tru_box'] = ''
+            
+        #box_ot = box_ot.reset_index(drop=True)
+        boxes_ot = pd.concat((boxes_ot, box_ot), axis=0, sort=False)
+
+    boxes_ot.loc[:, 'confmat'] = 'FP'
+    boxes_ot.loc[:, 'tru_box'] = ''
 
     return boxes_ot
 
 
-def match_truths(windows_out_pixels, truths_per_im):
+def match_truths(windows_out_pixels, truths_per_im, iou_threshold):
 
-    results_out = pd.DataFrame(columns = ['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal'])
+    if windows_out_pixels.shape[0] > 0:
+        results_out = pd.DataFrame(columns = ['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal'])
 
-    if truths_per_im.shape[0] > 0:
         results_per_im = windows_out_pixels[['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal']]
+        results_per_im = results_per_im.reset_index(drop=True)
         truz = [True] * truths_per_im.shape[0]
         rez = [True] * results_per_im.shape[0]
         matchz = np.array([True] * results_per_im.shape[0])
@@ -151,10 +157,11 @@ def match_truths(windows_out_pixels, truths_per_im):
             if iouz[iou_ind] > iou_threshold:
                 if rez[iou_ind]: 
                     best_iou_res = results_per_im.iloc[iou_ind:(iou_ind+1), :]
-                    best_iou_res['confmat'] = 'TP'
-                    true_box = f'xmin: {tru.xmn}, xmax:{tru.xmx}, ymin: {tru.ymn}, ymax: {tru.ymx}'
-                    best_iou_res['tru_box'] = true_box
-                    results_out = pd.concat((results_out, best_iou_res), axis=0, ignore_index=True)
+                    best_iou_res = best_iou_res.reset_index(drop=True)
+                    best_iou_res.loc[:, 'confmat'] = 'TP'
+                    true_box = f'xmin: {tru.xmn}; xmax:{tru.xmx}; ymin: {tru.ymn}; ymax: {tru.ymx}'
+                    best_iou_res.loc[:, 'tru_box'] = true_box
+                    results_out = pd.concat((results_out, best_iou_res), axis=0, ignore_index=True, sort=False)
                     truz[idx] = False
                     rez[iou_ind] = False
             # matchz removes any matches that overlap but are not the most overlapping
@@ -162,18 +169,30 @@ def match_truths(windows_out_pixels, truths_per_im):
             matchz[match_mask] = False
 
         results_per_im = results_per_im[matchz]
-        results_per_im['confmat'] = 'FP'
-        results_per_im['tru_box'] = ''
-        results_per_im = nms_for_fp(results_per_im, 0.5)
-        results_out = pd.concat((results_out, results_per_im), axis=0, ignore_index=True)
-        false_negatives = truths_per_im[['xmn', 'xmx', 'ymn', 'ymx']]
-        false_negatives = false_negatives[truz]
-        false_negatives['conf'] = 0
-        false_negatives['animal'] = 0
-        false_negatives['not_animal'] = 0
-        false_negatives['confmat'] = 'FN'
-        false_negatives['tru_box'] = ''
-        results_out = pd.concat((results_out, false_negatives), axis=0, ignore_index=True)
+        results_per_im = results_per_im.reset_index(drop=True)
+        if results_per_im.shape[0] > 1:
+            results_per_im = nms_for_fp(results_per_im, 0.5)
+            results_per_im = results_per_im.reset_index(drop=True)
+        results_out = pd.concat((results_out, results_per_im), axis=0, ignore_index=True, sort=False)  
+        if np.sum(truz) > 0:
+            false_negatives = truths_per_im[['xmn', 'xmx', 'ymn', 'ymx']]
+            false_negatives = false_negatives[truz]
+            false_negatives = false_negatives.reset_index(drop=True)
+            false_negatives.loc[:, 'conf'] = 0
+            false_negatives.loc[:, 'animal'] = 0
+            false_negatives.loc[:, 'not_animal'] = 0
+            false_negatives.loc[:, 'confmat'] = 'FN'
+            false_negatives.loc[:, 'tru_box'] = ''
+            results_out = pd.concat((results_out, false_negatives), axis=0, ignore_index=True, sort=False)
+        results_out = results_out.reset_index(drop=True)
+    else:
+        results_out = truths_per_im.loc[:, ['xmn', 'xmx', 'ymn', 'ymx']]
+        results_out.loc[:, 'conf'] = 0
+        results_out.loc[:, 'animal'] = 0
+        results_out.loc[:, 'not_animal'] = 0
+        results_out.loc[:, 'confmat'] = 'FN'
+        results_out.loc[:, 'tru_box'] = ''
+
 
     return results_out 
 

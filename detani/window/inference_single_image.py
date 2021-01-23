@@ -4,11 +4,13 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from detani.window.utils.tiling import create_tile_list
-from detani.window.models.window_classifier import inference_on_windows
-from detani.window.models.yolo_for_inference import YoloClass
-from detani.window.utils.windows import process_annotation_df_negative, create_windows_from_yolo
-from detani.window.utils.drawing import draw_results_on_image
+from window.utils.tiling import create_tile_list
+from window.models.window_classifier import AniWindowModel
+from window.models.yolo_for_inference import YoloClass
+from window.postprocess.match_truths import match_results_to_truths
+from window.utils.drawing import draw_results_on_image
+from window.utils.truths import windows_truth
+from window.utils.inference_windows import process_annotation_df_negative_inference, create_windows_from_yolo, windows_to_whole_im
 
 
 valid_whole_image_dir = "/data/old_home_dir/ChrissyF/GFRC/Valid/whole_images_all/"
@@ -33,22 +35,23 @@ tilez = create_tile_list(whole_im)
 # create yolo model
 saveweightspath = "/home/cmf21/pytorch_save/GFRC/Bin/rgb_baseline2/testing_save_163.pt"
 channels_in = 3
-yolo_model = YoloClass(saveweightspath, channels_in)
-boxes_whole_im = yolo_model.inference_on_image(tilez)
+yolo_model = YoloClass(wtpath=saveweightspath, channels=channels_in)
+boxes_whole_im = yolo_model.inference_on_image(tilez, 0.3)
 
 # convert output positions to windows
 windows_whole_im = process_annotation_df_negative(boxes_whole_im, [1856, 1248])
 windows_list = create_windows_from_yolo(windows_whole_im, tilez)
 
 # classify windows
-windows_filter_out = inference_on_windows(windows_list)
+windows_classifier = AniWindowModel()
+windows_filter_out = windows_classifier.inference_on_windows(windows_list, windows_whole_im)
 
 # convert windows back to whole image
 windows_results = windows_to_whole_im(windows_filter_out)
 
 # calculate results
 iou_threshold = 0.15
-results_per_im = match_results_to_truth(windows_results, truths_im, iou_threshold)
+results_per_im = match_results_to_truths(windows_results, truths_im, iou_threshold)
 
 # draw results on image
 image_out = draw_results_on_image(whole_im, results_per_im)
