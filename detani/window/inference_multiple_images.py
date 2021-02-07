@@ -8,19 +8,21 @@ from torchvision import transforms as transforms
 import torchvision.transforms.functional as tf
 
 from window.utils.tiling import create_tile_list
-from window.models.window_classifier import AniWindowModel
+from window.models.train_model import AniWindowModel
+from window.models.window_classifier import BinaryVggClassifier, BinaryWindowClassifier
 from window.models.yolo_for_inference import YoloClass
 from window.postprocess.match_truths import match_results_to_truths
 from window.utils.drawing import draw_results_on_image
 from window.utils.truths import windows_truth
 from window.utils.inference_windows import process_annotation_df_negative_inference, create_windows_from_yolo, windows_to_whole_im
 
+output_base_dir = "/home/cmf21/pytorch_save/GFRC/Bin/post_processed/pos_from_yolo/rgb_baseline2_incep/"
 
 valid_whole_image_dir = "/data/old_home_dir/ChrissyF/GFRC/Valid/whole_images_all/"
 truth_file = "/data/old_home_dir/ChrissyF/GFRC/yolo_valid_GFRC_bboxes.csv"
 
-output_dir = "/home/cmf21/pytorch_save/GFRC/Bin/rgb_baseline2_post/valid_results_on_image/"
-output_csv = "/home/cmf21/pytorch_save/GFRC/Bin/rgb_baseline2_post/results_post_window_classifier.csv"
+output_dir = output_base_dir + "valid_results_on_image/"
+output_csv = output_base_dir + "results_post_window_classifier.csv"
 
 # get all image files
 image_files = list(Path(valid_whole_image_dir).glob("*.jpg"))
@@ -36,10 +38,12 @@ channels_in = 3
 yolo_model = YoloClass(wtpath=saveweightspath, channels=channels_in)
 
 # create window classifier
-windows_classifier = AniWindowModel()
+cp_path = output_base_dir + "patch_model/checkpoint.ckpt.ckpt"
+classifier = BinaryWindowClassifier.load_from_checkpoint(checkpoint_path=cp_path)
+windows_classifier = AniWindowModel(classifier)
 
 # create empty list to store results
-results_all_ims = pd.DataFrame(columns=['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal', 'confmat', 'tru_box'])
+results_all_ims = pd.DataFrame(columns=['xmn', 'xmx', 'ymn', 'ymx', 'conf', 'animal', 'not_animal', 'confmat', 'tru_box', 'filename'])
 
 for fl in image_files:
     # filter truths
@@ -73,12 +77,15 @@ for fl in image_files:
 
     # calculate results
     iou_threshold = 0.15
-    results_per_im = match_results_to_truths(windows_results, truths_im_pixels, iou_threshold)
+    nms_threshold = 0.1
+    results_per_im = match_results_to_truths(windows_results, truths_im_pixels, iou_threshold, nms_threshold)
+    results_per_im['filename'] = fl
 
     results_all_ims = pd.concat((results_all_ims, results_per_im), axis=0, sort=False)
 
     # draw results on image
     image_out = draw_results_on_image(whole_im, results_per_im)
+    image_out = cv2.cvtColor(image_out, cv2.COLOR_BGR2RGB)
     cv2.imwrite(output_dir + fl, image_out)
 
 results_all_ims.to_csv(output_csv, index=False)

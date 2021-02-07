@@ -39,7 +39,7 @@ yolo_model = YoloClass(wtpath=saveweightspath, channels=channels_in)
 boxes_whole_im = yolo_model.inference_on_image(tilez, 0.3)
 
 # convert output positions to windows
-windows_whole_im = process_annotation_df_negative(boxes_whole_im, [1856, 1248])
+windows_whole_im = process_annotation_df_negative_inference(boxes_whole_im, [1856, 1248])
 windows_list = create_windows_from_yolo(windows_whole_im, tilez)
 
 # classify windows

@@ -61,3 +61,22 @@ def windows_to_whole_im(df_in):
     df_in.loc[:, 'ymx'] = np.array(ymax, dtype=np.int)
     return df_in
 
+
+def xc_to_xmn(df_in, img_w, img_h):
+    xmin = np.subtract(df_in.loc[:, 'xc'], np.divide(df_in.loc[:, 'wid'], 2))
+    xmax = np.add(df_in.loc[:, 'xc'], np.divide(df_in.loc[:, 'wid'], 2))
+    ymin = np.subtract(df_in.loc[:, 'yc'], np.divide(df_in.loc[:, 'hei'], 2))
+    ymax = np.add(df_in.loc[:, 'yc'], np.divide(df_in.loc[:, 'hei'], 2))
+    xmin = np.multiply(xmin, img_w)
+    xmax = np.multiply(xmax, img_w)
+    ymin = np.multiply(ymin, img_h)
+    ymax = np.multiply(ymax, img_h)
+    xmin = np.maximum(xmin, 0)
+    xmax = np.minimum(xmax, img_w)
+    ymin = np.maximum(ymin, 0)
+    ymax = np.minimum(ymax, img_h)
+    df_in.loc[:, 'xmn'] = np.array(xmin, dtype=np.int)
+    df_in.loc[:, 'xmx'] = np.array(xmax, dtype=np.int)
+    df_in.loc[:, 'ymn'] = np.array(ymin, dtype=np.int)
+    df_in.loc[:, 'ymx'] = np.array(ymax, dtype=np.int)
+    return df_in
