@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 
 dataset_to_use = 'GFRC'
-bin_yn = True
+bin_yn = False
 name_out = 'rgb_baseline'
-subset_to_window = 'train'
+subset_to_window = 'valid'
 
 if dataset_to_use == 'GFRC':
     ### GFRC

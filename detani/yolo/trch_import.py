@@ -50,6 +50,67 @@ class AnimalBoundBoxDataset(Dataset):
         return sample
 
 
+class AnimalBoundBoxMetaDataset(Dataset):
+
+    def __init__(self, root_dir, inputvec, anchors, maxann, metacolumn, transform=None, gray=False):
+        """
+        Args:
+            root_dir (string): Directory with all the images.
+            transform (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+        #self.landmarks_frame = pd.read_csv(csv_file)
+        self.root_dir = root_dir
+        self.transform = transform
+        self.files_list = os.listdir(self.root_dir)
+        self.maxann = maxann
+        for ff in range(len(self.files_list)):
+            self.files_list[ff] = self.files_list[ff][:-4]
+        self.files_list = np.unique(self.files_list)
+        self.gray = gray
+        self.image_data = pd.read_csv('/home/cmf21/pytorch_save/GFRC/preds_for_cnn.csv')
+        self.metacolumn = metacolumn
+
+    def __len__(self):
+        return len(self.files_list)
+
+    def __getitem__(self, idx):
+        img_name = self.root_dir + self.files_list[idx] + ".png"
+        img_name_split = self.files_list[idx].split("_")
+        img_to_match = img_name_split[0] + "_" + img_name_split[1]
+        #img_to_match = self.files_list[idx][:14]
+        #print(img_to_match)
+        #if img_to_match[-1] == '_':
+        #    img_to_match = img_to_match[:13]
+        #elif img_to_match[-2] == '_':
+        #    img_to_match = img_to_match[:12]
+        #elif img_to_match[-3] == '_':
+        #    img_to_match = img_to_match[:11]
+        #elif img_to_match[-4] == '_':
+        #    img_to_match = img_to_match[:10]
+        img_to_match = img_to_match + '.jpg'
+        matched_row = self.image_data[self.image_data.image_name == img_to_match]
+        image = io.imread(img_name, as_gray=self.gray)
+        image = np.divide(image, 255.0)
+        new_channel = np.ones((image.shape[0], image.shape[1], len(self.metacolumn)))
+        fillval = matched_row[self.metacolumn]
+        fillvals = np.expand_dims(fillval, axis=0)
+        new_channel = np.multiply(new_channel, fillvals)
+        image = np.dstack((image, new_channel))
+        bndbxs_name = self.root_dir + self.files_list[idx] + ".txt"
+        bndbxs = pd.read_csv(bndbxs_name, sep=' ', header=None, names=['class', 'xc', 'yc', 'wid', 'hei'])
+        bndbxs = bndbxs.astype('float')
+        bndbx_pad = pd.DataFrame(np.zeros((self.maxann-bndbxs.shape[0], 5)), columns=['class', 'xc', 'yc', 'wid', 'hei'])
+        bndbxs = pd.concat([bndbxs, bndbx_pad])
+
+        sample = {'image': image, 'bndbxs': bndbxs, 'name':img_name}
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+
+
 class MakeMat(object):
 
     def __init__(self, inputz, anchors):

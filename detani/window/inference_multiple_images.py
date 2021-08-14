@@ -79,6 +79,7 @@ for fl in image_files:
     iou_threshold = 0.15
     nms_threshold = 0.1
     results_per_im = match_results_to_truths(windows_results, truths_im_pixels, iou_threshold, nms_threshold)
+
     results_per_im['filename'] = fl
 
     results_all_ims = pd.concat((results_all_ims, results_per_im), axis=0, sort=False)

@@ -490,9 +490,27 @@ def match_truths_yolo_alt2(windows_out_pixels, truths_per_im, iou_threshold, nms
         # use matchz to filter results to keep only those that don't overlap with truths
         results_per_im = results_per_im[matchz]
         results_per_im = results_per_im.reset_index(drop=True)
+
+        # remove any remaining detections that overlap with true positive detections
+        iouz = []
+        matchz = np.array([True] * results_per_im.shape[0])
+
+        for idx, tp in results_out.iterrows():
+            iouz = []
+            for res_idx, result in results_per_im.iterrows():
+                iou = intersection_over_union(tp, result)
+                iouz.append(iou)
+            match_mask = np.array(iouz) > nms_threshold
+            matchz[match_mask] = False
+        results_per_im = results_per_im[matchz]
+        results_per_im = results_per_im.reset_index(drop=True)
+
         if results_per_im.shape[0] > 1:
             results_per_im = nms_for_fp_yolo(results_per_im, nms_threshold)
             results_per_im = results_per_im.reset_index(drop=True)
+        if results_per_im.shape[0] == 1:
+            results_per_im['confmat'] = 'FP'
+            results_per_im['tru_box'] = ''
         results_out = pd.concat((results_out, results_per_im), axis=0, ignore_index=True, sort=False)  
         true_match = np.array(true_match)
         true_match = np.logical_not(true_match)
@@ -500,7 +518,7 @@ def match_truths_yolo_alt2(windows_out_pixels, truths_per_im, iou_threshold, nms
             false_negatives = truths_per_im[['xmn', 'xmx', 'ymn', 'ymx']]
             false_negatives = false_negatives[true_match]
             false_negatives = false_negatives.reset_index(drop=True)
-            false_negatives.loc[:, 'conf'] = 0
+            false_negatives.loc[:, 'conf'] = 1.0
             false_negatives.loc[:, 'confmat'] = 'FN'
             false_negatives.loc[:, 'tru_box'] = ''
             results_out = pd.concat((results_out, false_negatives), axis=0, ignore_index=True, sort=False)
