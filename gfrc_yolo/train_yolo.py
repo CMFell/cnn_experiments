@@ -21,6 +21,7 @@ orig_size = True
 name_out = 'rgb_bin'
 basedir = 'E:/GFRC_data/'
 save_dir = basedir + 'output/' name_out + "/"
+Path(save_dir).mkdir(parents=True, exist_ok=True)
 nepochs = 200
 # change to restart from an existing epoch
 restartno = -1
