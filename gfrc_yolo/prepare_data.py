@@ -2,12 +2,12 @@ import os
 import numpy as np
 import pandas as pd
 
-from prepare_data_functions import create_windows, create_tiled_data, create_tiled_data_blanks
+from preprocess.prepare_data_functions import create_windows, create_tiled_data, create_tiled_data_blanks
 
 
 # Set input directory containing downloaded GFRC data and choose to prepare valid or traindata
 # Directory with files
-basedir = 'E:/'
+basedir = 'E:/GFRC_data/'
 # type of input valid or train
 settype = 'valid'
 
@@ -35,7 +35,7 @@ neg_folder = settype + '_images/neg/'
 # csv containing object positions
 csv_name = settype + '_images/' + settype + '_GFRC_bboxes_' + binmulti'.csv'
 # output folder to save tiles
-out_folder = settype + '_images/yolo_' + settype + '1248_' + binmulti + '/'
+out_folder = 'yolo_' + settype + '_1248_' + binmulti + '/'
 # Full path csv
 csv_file = basedir + csv_name
 # Read in csv file
