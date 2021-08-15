@@ -25,6 +25,20 @@ save_dir = basedir + 'output/' name_out + "/"
 nepochs = 200
 epochstart = 0
 
+# colour or greyscale
+if grey_tf:
+    channels_in = 1
+else:
+    channels_in = 3
+
+# if using metadata
+use_meta = False:
+if use_meta:
+    name_out = 'meta_ci_end'
+    colz = ['lowerci', 'upperci']
+    metadata_end = True
+    channels_in = channels_in + len(colz)
+
 ### GFRC
 img_w = 1856
 img_h = 1248
@@ -34,17 +48,13 @@ anchors = [[2.387088, 2.985595], [1.540179, 1.654902], [3.961755, 3.936809], [2.
             [5.319540, 6.116692]]
 if bin_yn:
     # Bin
-    files_location = basedir + 'yolo_train_1248_bin/'
+    files_location = basedir + 'yolo_valid_1248_bin/'
     nclazz = 1
 else:
     # Multi
-    files_location = basedir + 'yolo_train_1248_multi/'
+    files_location = basedir + 'yolo_valid_1248_multi/'
     nclazz = 6
-# colour or greyscale
-if grey_tf:
-    channels_in = 1
-else:
-    channels_in = 3
+
 if orig_size:
     # Original net size
     box_size = [32, 32]
@@ -75,22 +85,40 @@ for xx in range(epochstart, nepochs):
     #    continue
     save_path = save_dir + save_name + str(xx) + ".pt" 
     print(save_path)
-    animal_dataset_valid_sm = AnimalBoundBoxDataset(root_dir=files_location_valid_sub, 
-                                                        inputvec=input_vec,
-                                                        anchors=anchors,
-                                                        maxann=max_annotations,
-                                                        transform=transforms.Compose([
-                                                            MakeMat(input_vec, anchors),
-                                                            ToTensor()
-                                                        ]),
-                                                        gray=grey_tf
-                                                    )
 
-    animalloader_valid = DataLoader(animal_dataset_valid_sm, batch_size=1, shuffle=False)
+    if use_meta:
+        animal_dataset_valid = AnimalBoundBoxMetaDataset(root_dir=files_location,
+                                        inputvec=input_vec,
+                                        anchors=anchors,
+                                        maxann=max_annotations,
+                                        metacolumn=colz,
+                                        transform=transforms.Compose([
+                                                MakeMat(input_vec, anchors),
+                                                ToTensor()
+                                            ]),
+                                            gray=grey_tf,
+                                            based=basedir
+                                        )
+    else:
+        animal_dataset_valid = AnimalBoundBoxDataset(root_dir=files_location,
+                                            inputvec=input_vec,
+                                            anchors=anchors,
+                                            maxann=max_annotations,
+                                            transform=transforms.Compose([
+                                                    MakeMat(input_vec, anchors),
+                                                    ToTensor()
+                                                ]),
+                                                gray=grey_tf
+                                            )
+
+    animalloader_valid = DataLoader(animal_dataset_valid, batch_size=1, shuffle=False)
 
     layerlist = get_weights(weightspath)
 
-    net = YoloNetOrig(layerlist, fin_size, channels_in)
+    if metadata_end:
+        net = YoloNetMeta(layerlist, fin_size, channels_in)
+    else:
+        net = YoloNetOrig(layerlist, fin_size, channels_in)
     net = net.to(device)
     net.load_state_dict(torch.load(save_path))
     net.eval()

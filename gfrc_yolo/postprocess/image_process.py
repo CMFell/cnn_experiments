@@ -81,7 +81,7 @@ def split_filename(str_in):
     return file_out, tile_out
 
 
-def predict_on_images(image_files, whole_image_dir, yolo_model):
+def predict_on_images(image_files, whole_image_dir, yolo_model, basedir):
           
     windows_whole = pd.DataFrame(columns=['xc', 'yc', 'wid', 'hei', 'conf', 'class', 'xmn', 'xmx', 'ymn', 'ymx', 'filename'])
 
@@ -96,7 +96,7 @@ def predict_on_images(image_files, whole_image_dir, yolo_model):
         tilez = create_tile_list(whole_im)
 
         # get predictions from yolo , 0.01 keeps confidence over 1% only
-        boxes_whole_im = yolo_model.inference_on_image(tilez, 0.01, fl)
+        boxes_whole_im = yolo_model.inference_on_image(tilez, 0.01, fl, basedir)
         # convert tile results into whole image results
         windows_whole_im = windows_to_whole_im(boxes_whole_im)
         windows_whole_im['filename'] = fl

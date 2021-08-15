@@ -8,8 +8,8 @@ from torchvision import transforms, utils
 
 from yolo.trch_weights import get_weights
 from yolo.trch_yolonet import YoloNetOrig, YoloNetMeta
-from window.models.yolo_datasets import TileImageTestDataset, TileImageTestDatasetMeta
-from window.utils.yolo import yolo_output_to_box_test
+from yolo.yolo_datasets import TileImageTestDataset, TileImageTestDatasetMeta
+from yolo.yolo_valid_utils import yolo_output_to_box_test
 
 class YoloClass(ABC):
     def __init__(self, wtpath, channels, img_w=1856, img_h=1248, nclazz=1, meta_cols=None, meta_end=False):
@@ -44,13 +44,13 @@ class YoloClass(ABC):
             layerlist = get_weights(weightspath)
             self.net = YoloNetOrig(layerlist, fin_size, channels)
         
-    def inference_on_image(self, tilez, conf_threshold, img_name=None):
+    def inference_on_image(self, tilez, conf_threshold, img_name=None, basedir):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         net = self.net.to(device)
         net.load_state_dict(torch.load(self.saveweightspath))
         net.eval()
         if self.meta_cols != None:
-            tile_dataset = TileImageTestDatasetMeta(tilez, self.meta_cols, img_name)
+            tile_dataset = TileImageTestDatasetMeta(tilez, self.meta_cols, img_name, basedir)
         else:
             tile_dataset = TileImageTestDataset(tilez)
         tileloader = DataLoader(tile_dataset, batch_size=1, shuffle=False)

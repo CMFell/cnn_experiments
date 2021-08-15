@@ -52,7 +52,7 @@ class AnimalBoundBoxDataset(Dataset):
 
 class AnimalBoundBoxMetaDataset(Dataset):
 
-    def __init__(self, root_dir, inputvec, anchors, maxann, metacolumn, transform=None, gray=False):
+    def __init__(self, root_dir, inputvec, anchors, maxann, metacolumn, based, transform=None, gray=False):
         """
         Args:
             root_dir (string): Directory with all the images.
@@ -68,7 +68,7 @@ class AnimalBoundBoxMetaDataset(Dataset):
             self.files_list[ff] = self.files_list[ff][:-4]
         self.files_list = np.unique(self.files_list)
         self.gray = gray
-        self.image_data = pd.read_csv('/home/cmf21/pytorch_save/GFRC/preds_for_cnn.csv')
+        self.image_data = pd.read_csv(based / 'preds_for_cnn.csv')
         self.metacolumn = metacolumn
 
     def __len__(self):

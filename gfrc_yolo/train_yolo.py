@@ -5,8 +5,8 @@ from torch import optim
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
-from yolo.yolo_import import AnimalBoundBoxDataset, ToTensor, MakeMat
-from yolo.yolo_net import YoloNet, YoloNetSimp, YoloNetOrig
+from yolo.yolo_import import AnimalBoundBoxDataset, AnimalBoundBoxMetaDataset, ToTensor, MakeMat
+from yolo.yolo_net import YoloNet, YoloNetSimp, YoloNetOrig, YoloNetMeta
 from yolo.yolo_loss import YoloLoss
 from yolo.yolo_accuracy import accuracy
 from yolo.yolo_weights import get_weights
@@ -26,6 +26,20 @@ nepochs = 200
 # change to restart from an existing epoch
 restartno = -1
 
+# colour or greyscale
+if grey_tf:
+    channels_in = 1
+else:
+    channels_in = 3
+
+# if using metadata
+use_meta = False:
+if use_meta:
+    name_out = 'meta_ci_end'
+    colz = ['lowerci', 'upperci']
+    metadata_end = True
+    channels_in = channels_in + len(colz)
+
 # GFRC values
 img_w = 1856
 img_h = 1248
@@ -42,11 +56,7 @@ else:
     files_location = basedir + 'yolo_train_1248_multi/'
     nclazz = 6
 
-# colour or greyscale
-if grey_tf:
-    channels_in = 1
-else:
-    channels_in = 3
+
 if orig_size:
     # Original net size
     box_size = [32, 32]
@@ -97,23 +107,41 @@ cell_grid = np.tile(np.stack([cell_x, cell_y], -1), [1, 1, 1, 5, 1])
 cell_grid = torch.from_numpy(cell_grid).type(torch.FloatTensor)
 cell_grid = cell_grid.to(device)
 
-animal_dataset = AnimalBoundBoxDataset(root_dir=files_location,
+if use_meta:
+    animal_dataset = AnimalBoundBoxMetaDataset(root_dir=files_location,
                                        inputvec=input_vec,
                                        anchors=anchors,
                                        maxann=max_annotations,
+                                       metacolumn=colz,
                                        transform=transforms.Compose([
                                                MakeMat(input_vec, anchors),
                                                ToTensor()
                                            ]),
-                                        gray=grey_tf
+                                        gray=grey_tf,
+                                        based=basedir
                                        )
+else:
+    animal_dataset = AnimalBoundBoxDataset(root_dir=files_location,
+                                        inputvec=input_vec,
+                                        anchors=anchors,
+                                        maxann=max_annotations,
+                                        transform=transforms.Compose([
+                                                MakeMat(input_vec, anchors),
+                                                ToTensor()
+                                            ]),
+                                            gray=grey_tf
+                                        )
 
 
 animalloader = DataLoader(animal_dataset, batch_size=bat_sz, shuffle=True)
 
 layerlist = get_weights(weightspath)
 
-net = YoloNetOrig(layerlist, fin_size, channels_in)
+if metadata_end:
+    net = YoloNetMeta(layerlist, fin_size, channels_in)
+else:
+    net = YoloNetOrig(layerlist, fin_size, channels_in)
+
 net = net.to(device)
 if epochstart > 0:
     save_path = save_dir + save_name + str(restartno) + ".pt"

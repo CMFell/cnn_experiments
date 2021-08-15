@@ -110,7 +110,7 @@ gfrc_truth = process_truths(gfrc_truth, 'gfrc')
 if predict_results:
     image_files = get_image_file_names(whole_image_dir)
     yolo_model = YoloClass(wtpath=saveweightspath, channels=channels_in, nclazz=nclazz, meta_cols=col_list, meta_end=meta_end)
-    gfrc_windows_in = predict_on_images(image_files, whole_image_dir, yolo_model)
+    gfrc_windows_in = predict_on_images(image_files, whole_image_dir, yolo_model, basedir)
     windows_filename = name_out + '_windows.csv'
     gfrc_windows_in.to_csv(output_save_dir + windows_filename, index=False)
 else:
